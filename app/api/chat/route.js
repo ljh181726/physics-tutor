@@ -16,7 +16,7 @@ export async function POST(req) {
     `;
 
     // 使用你之前測試成功的最新模型代號
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-preview' });
 
     const parts = [
       { text: systemInstruction + "\n\n學生的問題：" + prompt }
