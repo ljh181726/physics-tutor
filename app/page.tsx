@@ -106,7 +106,7 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 pb-12">
       <div className="bg-white border-b px-6 py-6 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-extrabold text-blue-600 tracking-tight">AI 物理AI</h1>
+          <h1 className="text-xl font-extrabold text-blue-600 tracking-tight">物理AI</h1>
           <button onClick={() => {setIsLocked(true); setImagesBase64([]);}} className="text-gray-400 text-sm font-medium">登出</button>
         </div>
       </div>
