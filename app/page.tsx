@@ -74,16 +74,14 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
-      {/* 頂部標題 */}
       <div className="bg-white border-b px-4 py-6 sticky top-0 z-10 shadow-sm">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
           <h1 className="text-xl font-bold text-blue-600">AI 物理家教</h1>
-          <button onClick={() => setIsLocked(true)} className="text-gray-400 text-sm">鎖定</button>
+          <button onClick={() => { setIsLocked(true); setImagesBase64([]); }} className="text-gray-400 text-sm">鎖定</button>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto p-4 space-y-6">
-        {/* 輸入區域 */}
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
           <div>
             <label className="text-sm font-medium text-gray-500 mb-2 block">上傳題目 (多張可)</label>
@@ -92,7 +90,7 @@ export default function Home() {
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="w-full bg-gray-50 rounded-xl p-4 h-32 outline-none focus:ring-2 focus:ring-blue-100 transition"
+            className="w-full bg-gray-50 rounded-xl p-4 h-32 outline-none focus:ring-2 focus:ring-blue-100 transition text-black"
             placeholder="請輸入你的物理疑問..."
             required
           />
@@ -105,25 +103,18 @@ export default function Home() {
           </button>
         </form>
 
-        {/* 解答區域 - 這裡針對你的排版需求做了大幅優化 */}
         <div className="bg-white rounded-2xl p-6 md:p-10 shadow-sm overflow-hidden min-h-[400px]">
-          <div className="prose prose-slate max-w-none 
-            prose-p:leading-relaxed prose-p:mb-6 
-            prose-li:my-2
-            prose-headings:text-blue-700
-            overflow-x-auto text-gray-700">
+          {/* 修正：使用單引號將所有內容放在一行，避免換行錯誤 */}
+          <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-p:mb-6 prose-li:my-2 prose-headings:text-blue-700 overflow-x-auto text-gray-700">
             <ReactMarkdown 
               remarkPlugins={[remarkMath]} 
               rehypePlugins={[rehypeKatex, rehypeRaw]}
               components={{
-                // 修正 SVG 與圖片排版
                 img: ({node, ...props}) => (
                   <div className="my-8 flex justify-center w-full">
                     <img {...props} className="max-w-full h-auto rounded-lg" style={{ display: 'block' }} />
                   </div>
                 ),
-                // 針對 rehype-raw 渲染出的標籤進行樣式注入
-                // 我們無法直接在這裡攔截 SVG 標籤，但透過 prose 的 CSS 可以控制
               }}
             >
               {aiResponseText}
@@ -132,7 +123,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 底部 CSS 注入：強制修正 SVG 與公式寬度，不影響文字 */}
       <style jsx global>{`
         .prose svg {
           max-width: 100% !important;
@@ -146,7 +136,6 @@ export default function Home() {
           overflow-x: auto;
           overflow-y: hidden;
         }
-        /* 增加一般文字的易讀性 */
         .prose p {
           font-size: 1.05rem;
           letter-spacing: 0.02em;
