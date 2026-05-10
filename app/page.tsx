@@ -76,7 +76,7 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white border-b px-4 py-6 sticky top-0 z-10 shadow-sm">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold text-blue-600">AI 物理家教</h1>
+          <h1 className="text-xl font-bold text-blue-600">AI 物理AI</h1>
           <button onClick={() => { setIsLocked(true); setImagesBase64([]); }} className="text-gray-400 text-sm">鎖定</button>
         </div>
       </div>
