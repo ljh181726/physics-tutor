@@ -11,20 +11,15 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [isLocked, setIsLocked] = useState(true);
   const [prompt, setPrompt] = useState('');
-  // 🟢 重點：改成複數陣列
   const [imagesBase64, setImagesBase64] = useState<string[]>([]);
   const [aiResponseText, setAiResponseText] = useState('老師正在等你的問題...');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = () => {
-    if (password === "8888") {
-      setIsLocked(false);
-    } else {
-      alert("密碼錯誤！");
-    }
+    if (password === "8888") setIsLocked(false);
+    else alert("密碼錯誤！");
   };
 
-  // 🟢 重點：處理多張圖片上傳
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
@@ -36,10 +31,7 @@ export default function Home() {
           reader.readAsDataURL(file);
         });
       });
-
-      Promise.all(promises).then((base64Strings) => {
-        setImagesBase64(base64Strings);
-      });
+      Promise.all(promises).then((base64Strings) => setImagesBase64(base64Strings));
     }
   };
 
@@ -47,19 +39,16 @@ export default function Home() {
     e.preventDefault();
     setIsLoading(true);
     setAiResponseText('思考與解題中，請稍候...');
-
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // 🟢 重點：傳送圖片陣列
         body: JSON.stringify({ prompt, imagesBase64 }),
       });
-      
       const data = await res.json();
       setAiResponseText(data.text || '發生錯誤：' + data.error);
     } catch (error) {
-      setAiResponseText('連線失敗，請確認網路狀態。');
+      setAiResponseText('連線失敗，請稍後再試。');
     } finally {
       setIsLoading(false);
     }
@@ -67,76 +56,102 @@ export default function Home() {
 
   if (isLocked) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-6">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center border border-gray-200">
-          <div className="text-4xl mb-4">🔐</div>
-          <h1 className="text-xl font-bold mb-6">私人 AI 物理教學區</h1>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white p-6">
+        <div className="w-full max-w-sm">
+          <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">🔒 私人物理教學專區</h1>
           <input 
             type="password" 
-            placeholder="輸入存取密碼"
-            className="w-full border border-gray-300 p-3 rounded-lg text-black mb-4 outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="請輸入解鎖密碼"
+            className="w-full border-b-2 border-blue-500 p-3 mb-6 outline-none text-center text-xl"
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
           />
-          <button onClick={handleLogin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
-            驗證進入
-          </button>
+          <button onClick={handleLogin} className="w-full bg-blue-600 text-white py-3 rounded-full shadow-lg">進入</button>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="max-w-4xl mx-auto p-4 md:p-8 font-sans text-gray-800">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-blue-600">AI 物理解惑 🤖</h1>
-        <button onClick={() => { setIsLocked(true); setImagesBase64([]); }} className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-500">鎖定</button>
-      </div>
-      
-      <form onSubmit={handleSubmit} className="mb-8 space-y-4 bg-gray-50 p-4 md:p-6 rounded-xl shadow border border-gray-100">
-        <div>
-          <label className="block mb-2 text-sm font-bold text-gray-700">題目照片 (可選多張)</label>
-          <input 
-            type="file" 
-            accept="image/*" 
-            multiple // 🟢 重點：加入 multiple 屬性
-            onChange={handleImageUpload} 
-            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700" 
-          />
-          {imagesBase64.length > 0 && (
-            <p className="mt-2 text-xs text-blue-600">已選取 {imagesBase64.length} 張照片</p>
-          )}
+    <main className="min-h-screen bg-gray-50 pb-20">
+      {/* 頂部標題 */}
+      <div className="bg-white border-b px-4 py-6 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-3xl mx-auto flex justify-between items-center">
+          <h1 className="text-xl font-bold text-blue-600">AI 物理家教</h1>
+          <button onClick={() => setIsLocked(true)} className="text-gray-400 text-sm">鎖定</button>
         </div>
-        
-        <div>
-          <label className="block mb-2 text-sm font-bold text-gray-700">描述你的問題</label>
+      </div>
+
+      <div className="max-w-3xl mx-auto p-4 space-y-6">
+        {/* 輸入區域 */}
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-500 mb-2 block">上傳題目 (多張可)</label>
+            <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="w-full text-sm" />
+          </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-3 h-24 focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="可以上傳多張題目與算式，讓老師幫你檢查。"
+            className="w-full bg-gray-50 rounded-xl p-4 h-32 outline-none focus:ring-2 focus:ring-blue-100 transition"
+            placeholder="請輸入你的物理疑問..."
             required
           />
-        </div>
-
-        <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg disabled:bg-gray-300">
-          {isLoading ? '老師正在閱卷解題中...' : '送出提問'}
-        </button>
-      </form>
-
-      <div className="bg-white border border-gray-200 p-4 md:p-8 rounded-xl shadow-lg min-h-[200px] w-full overflow-hidden">
-        <div className="prose prose-blue max-w-none overflow-x-auto">
-          <ReactMarkdown 
-            remarkPlugins={[remarkMath]} 
-            rehypePlugins={[rehypeKatex, rehypeRaw]}
-            components={{
-              img: ({node, ...props}) => <img {...props} style={{maxWidth: '100%', height: 'auto'}} />,
-            }}
+          <button 
+            type="submit" 
+            disabled={isLoading} 
+            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl disabled:bg-blue-300 shadow-md active:scale-95 transition"
           >
-            {aiResponseText}
-          </ReactMarkdown>
+            {isLoading ? '老師正在分析中...' : '送出提問'}
+          </button>
+        </form>
+
+        {/* 解答區域 - 這裡針對你的排版需求做了大幅優化 */}
+        <div className="bg-white rounded-2xl p-6 md:p-10 shadow-sm overflow-hidden min-h-[400px]">
+          <div className="prose prose-slate max-w-none 
+            prose-p:leading-relaxed prose-p:mb-6 
+            prose-li:my-2
+            prose-headings:text-blue-700
+            overflow-x-auto text-gray-700">
+            <ReactMarkdown 
+              remarkPlugins={[remarkMath]} 
+              rehypePlugins={[rehypeKatex, rehypeRaw]}
+              components={{
+                // 修正 SVG 與圖片排版
+                img: ({node, ...props}) => (
+                  <div className="my-8 flex justify-center w-full">
+                    <img {...props} className="max-w-full h-auto rounded-lg" style={{ display: 'block' }} />
+                  </div>
+                ),
+                // 針對 rehype-raw 渲染出的標籤進行樣式注入
+                // 我們無法直接在這裡攔截 SVG 標籤，但透過 prose 的 CSS 可以控制
+              }}
+            >
+              {aiResponseText}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
+
+      {/* 底部 CSS 注入：強制修正 SVG 與公式寬度，不影響文字 */}
+      <style jsx global>{`
+        .prose svg {
+          max-width: 100% !important;
+          height: auto !important;
+          margin: 2rem auto !important;
+          display: block !important;
+        }
+        .prose .katex-display {
+          margin: 1.5rem 0 !important;
+          padding: 1rem 0;
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+        /* 增加一般文字的易讀性 */
+        .prose p {
+          font-size: 1.05rem;
+          letter-spacing: 0.02em;
+        }
+      `}</style>
     </main>
   );
 }
