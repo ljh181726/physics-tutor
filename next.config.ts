@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 允許這個 IP 的連線
-  experimental: {
-    allowedDevOrigins: ['26.86.8.229'],
-  },
+  /* 這裡現在不需要放任何東西，Vercel 會幫你處理好連線 */
 };
 
 export default nextConfig;
