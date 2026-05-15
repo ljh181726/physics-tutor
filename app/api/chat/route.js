@@ -7,7 +7,8 @@ export async function POST(req) {
   try {
     // 🟢 重點：接收 imagesBase64 (陣列)
     const { imagesBase64, prompt } = await req.json();
-
+    console.log("有人問了：", prompt);
+    
     const systemInstruction = `
       你是一位專業的高中物理老師。
       1. 請提供條列式的解題步驟，段落之間請多留一個空行，避免文字堆疊。
