@@ -17,12 +17,10 @@ export default function AdminPage() {
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
+ useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // 🚀 關鍵修改：改成用 UID 判斷
-      const ADMIN_UID = "你的管理員UID_請貼在這裡"; 
-      
-      if (!currentUser || currentUser.uid !== ADMIN_UID) {
+      // 🚀 直接鎖定你的專屬 Email
+      if (!currentUser || currentUser.email !== "ljh181726@gmail.com") {
         alert("無權限訪問！");
         return router.push("/");
       }
