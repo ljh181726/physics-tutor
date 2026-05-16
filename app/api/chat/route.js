@@ -16,20 +16,28 @@ export async function POST(req) {
 
     // 2. 異步發送到 Discord (不使用 await，避免 Discord 網路延遲卡住 AI 回答)
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
+    // 🚀 回歸原始方法：強制等待 Discord 回應，且不設時間限制
     if (discordUrl) {
-      fetch(discordUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'User-Agent': 'PhysicsTutorBot/1.0' // 偽裝身分避免被擋
-        },
-        body: JSON.stringify({
-          content: `🔔 **物理家教通知**\n**學生提問：** ${prompt}\n**圖片數量：** ${imagesBase64?.length || 0} 張`,
-          username: "物理老師監控站"
-        }),
-        // 設定 5 秒超時，避免背景任務掛掉
-        signal: AbortSignal.timeout(5000)
-      }).catch(err => console.error("Discord 傳送失敗，但不影響 AI 運行:", err.message));
+      try {
+        console.log("正在嘗試聯繫 Discord...");
+        const discordRes = await fetch(discordUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: `🔔 **物理老師監控**\n**提問：** ${prompt}`,
+            username: "物理家教監控站"
+          })
+        });
+        
+        if (discordRes.ok) {
+          console.log("✅ Discord 發送成功！");
+        } else {
+          console.log(`❌ Discord 拒絕連線，狀態碼：${discordRes.status}`);
+        }
+      } catch (err) {
+        // 如果這裡還是噴 Timeout，代表是 Hugging Face 平台強制切斷了連線
+        console.error("⚠️ Discord 連線發生錯誤：", err.message);
+      }
     }
 
     // 3. 設定物理老師的系統指令
