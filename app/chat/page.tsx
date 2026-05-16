@@ -23,6 +23,7 @@ export default function ChatPage() {
 }
 
 function DashboardContent() {
+    const isAdmin = user?.uid === "xTpyc18UxKWQFW2gcVxGvIC7rYV2";
     const handleRenameThread = async (e, threadId, oldTitle) => {
     e.stopPropagation(); // 防止點擊時跳轉進房間
     const newTitle = prompt("✏️ 請輸入新的對話標題：", oldTitle);
@@ -126,13 +127,24 @@ function DashboardContent() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/")} className="hover:opacity-80 text-xl">🏠</button>
-          <h1 className="text-xl font-bold">{subjectInfo.name} 題目目錄</h1>
-        </div>
-        <span className="text-sm opacity-90">{user?.displayName} 同學</span>
-      </header>
+  <div className="flex items-center gap-3">
+    <button onClick={() => router.push("/")} className="hover:opacity-80 text-xl">🏠</button>
+    <h1 className="text-xl font-bold">{subjectInfo.name} 題目目錄</h1>
+  </div>
 
+  <div className="flex items-center gap-4">
+    {/* 🚀 消失的管理員介面入口在這裡！ */}
+    {isAdmin && (
+      <button 
+        onClick={() => router.push("/admin")} // 假設你的管理員路徑是 /admin
+        className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded-lg text-sm font-bold transition-colors border border-white/50"
+      >
+        ⚙️ 管理後台
+      </button>
+    )}
+    <span className="text-sm opacity-90">{user?.displayName} {isAdmin ? "(管理員)" : "同學"}</span>
+  </div>
+</header>
       <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
         <button 
           onClick={handleOpenNewThread}
