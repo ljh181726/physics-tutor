@@ -34,10 +34,11 @@ function ChatContent() {
   const searchParams = useSearchParams();
   
   const threadId = params.id;
-  const subject = searchParams.get("subject") || "physics";
   
-  // 🛡️ 防禦性修復：如果 SUBJECT_MAP 找不到該科目，提供預設值防止 color 報錯
-  const subjectInfo = SUBJECT_MAP[subject] || { name: "輔導教室", color: "bg-gray-800" };
+  // 🛡️ 雙重防禦防護：在打包編譯預渲染時，確保 subjectInfo 絕對不可能是 undefined
+  const rawSubject = searchParams.get("subject") || "physics";
+  const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
+  const subjectInfo = SUBJECT_MAP[subject];
 
   const [user, setUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -45,6 +46,9 @@ function ChatContent() {
   const [isSending, setIsSending] = useState(false);
   const [imagesBase64, setImagesBase64] = useState([]);
   const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -112,7 +116,7 @@ function ChatContent() {
           subject, 
           history: messages, 
           threadId,
-          userName: user?.displayName // 🚀 傳送學生姓名給 Discord
+          userName: user?.displayName
         })
       });
       const data = await response.json();
