@@ -76,7 +76,8 @@ function ChatContent() {
         uid: user.uid, userName: user.displayName, subject,
         question: prev?.role === "user" ? prev.content : "追問內容",
         answer: msg.content, images: prev?.images || [],
-        timestamp: Date.now(), isPublic: true
+        timestamp: Date.now(), isPublic: true,
+        threadId: threadId // 🚀 關鍵新增：把房間 ID 一起存進錯題本
       };
       await addDoc(collection(db, `users/${user.uid}/wrong_questions`), data);
       await addDoc(collection(db, "community_vault"), data);
