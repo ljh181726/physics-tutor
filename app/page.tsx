@@ -6,7 +6,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 // 🚀 關鍵：把這裡換成你剛剛在 Firebase 複製的 UID
-const ADMIN_UID = "YOUR_ADMIN_UID_請替換成你的";
+const ADMIN_UID = "xTpyc18UxKWQFW2gcVxGvIC7rYV2";
 
 export default function Home() {
   const [user, setUser] = useState(null);
@@ -40,7 +40,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full text-center mb-8">
         <h1 className="text-4xl font-extrabold text-gray-900 mb-2">AI 智慧教育平台</h1>
-        <p className="text-lg text-gray-600">你的專屬全科家教，隨時在線。</p>
+        <p className="text-lg text-gray-600">你的專屬全科ai，隨時在線。</p>
       </div>
 
       {!user ? (
@@ -63,7 +63,7 @@ export default function Home() {
             <button onClick={handleLogout} className="text-red-600 hover:text-red-800 font-medium px-4 py-2 bg-red-50 rounded-lg">登出</button>
           </div>
 
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">請選擇今天的輔導科目</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">請選擇今天想提問科目</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <SubjectCard title="📐 高中數學" color="bg-red-50 text-red-700 border-red-200" onClick={() => enterClassroom('math')} />
