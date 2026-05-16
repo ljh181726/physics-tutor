@@ -175,4 +175,8 @@ function ChatRoom() {
     <div className="flex flex-col h-screen bg-gray-50">
       <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/")} className="hover:opacity-80 text
+          <button onClick={() => router.push("/")} className="hover:opacity-80 text-xl">🏠</button>
+          <h1 className="text-xl font-bold">{subjectInfo.name} 輔導教室</h1>
+        </div>
+        <span className="text-sm opacity-90">{user?.displayName} 同學</span>
+      </header>
