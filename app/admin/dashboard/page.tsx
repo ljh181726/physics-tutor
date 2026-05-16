@@ -2,118 +2,124 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { auth, db } from "../../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, getDocs, deleteDoc, doc, where } from "firebase/firestore";
 
-// 🚀 一樣，這裡要填入你的 UID 當作雙重保險
-const ADMIN_UID = "YOUR_ADMIN_UID_請替換成你的";
-
-export default function AdminDashboard() {
+export default function AdminPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [vaultData, setVaultData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [knowledgeList, setKnowledgeList] = useState([]);
+  
+  // 表單狀態
+  const [subject, setSubject] = useState("physics");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  // 1. 嚴格驗證身分
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user || user.uid !== ADMIN_UID) {
-        alert("權限不足！");
-        router.push("/");
-      } else {
-        setIsAdmin(true);
-        await fetchCommunityVault();
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // 🚀 關鍵修改：改成用 UID 判斷
+      const ADMIN_UID = "你的管理員UID_請貼在這裡"; 
+      
+      if (!currentUser || currentUser.uid !== ADMIN_UID) {
+        alert("無權限訪問！");
+        return router.push("/");
       }
+      setIsAdmin(true);
+      fetchKnowledge();
     });
     return () => unsubscribe();
   }, [router]);
 
-  // 2. 抓取全校的錯題資料
-  const fetchCommunityVault = async () => {
+  const fetchKnowledge = async () => {
     try {
-      const q = query(collection(db, "community_vault"), orderBy("timestamp", "desc"));
+      const q = query(collection(db, "knowledge_base"), orderBy("timestamp", "desc"));
       const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVaultData(data);
+      setKnowledgeList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) { console.error("讀取知識庫失敗", err); }
+  };
+
+  const handleSaveKnowledge = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || !content.trim()) return alert("標題和內容不能為空");
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, "knowledge_base"), {
+        subject, title, content, timestamp: Date.now()
+      });
+      alert("✅ 講義知識已存入！");
+      setTitle(""); setContent("");
+      fetchKnowledge();
     } catch (err) {
-      console.error("無法讀取全校數據：", err);
+      alert("❌ 儲存失敗：" + err.message);
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
-  if (!isAdmin || loading) return <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">驗證安全憑證中...</div>;
+  const handleDelete = async (id) => {
+    if (!confirm("確定刪除這筆知識點嗎？")) return;
+    try {
+      await deleteDoc(doc(db, "knowledge_base", id));
+      setKnowledgeList(prev => prev.filter(k => k.id !== id));
+    } catch (err) { alert("刪除失敗"); }
+  };
+
+  if (!isAdmin) return <div className="min-h-screen flex items-center justify-center">驗證身分中...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 py-10 px-4 sm:px-6">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex justify-between items-center mb-10 border-b border-gray-700 pb-6">
-          <div>
-            <h1 className="text-3xl font-black text-white flex items-center gap-3">
-              🛡️ 平台總管理中心
-            </h1>
-            <p className="text-gray-400 mt-2">上帝視角：查看全校學生的學習盲點與錯題庫。</p>
-          </div>
-          <button onClick={() => router.push("/")} className="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors border border-gray-600">
-            返回大廳
-          </button>
+    <div className="min-h-screen bg-gray-50 p-6 md:p-12">
+      <div className="max-w-5xl mx-auto">
+        <header className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-extrabold text-gray-800">⚙️ 老師的專屬大腦 (講義庫)</h1>
+          <button onClick={() => router.push("/")} className="bg-gray-800 text-white px-4 py-2 rounded-lg">返回大廳</button>
         </header>
 
-        {/* 總覽數據小卡 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg">
-            <p className="text-gray-400 font-medium mb-1">全校累計錯題總數</p>
-            <p className="text-5xl font-black text-blue-400">{vaultData.length}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* 左側：新增知識表單 */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 h-fit">
+            <h2 className="text-xl font-bold mb-4">➕ 新增知識點</h2>
+            <form onSubmit={handleSaveKnowledge} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">科目</label>
+                <select value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded-lg p-2">
+                  <option value="physics">🍎 物理</option>
+                  <option value="math">📐 數學</option>
+                  <option value="chemistry">🧪 化學</option>
+                  <option value="biology">🧬 生物</option>
+                  <option value="earth">🌍 地科</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">知識點標題 (例如：摩擦力解題三步驟)</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border rounded-lg p-2" placeholder="輸入標題..." />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">講義內容 / 解題心法</label>
+                <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full border rounded-lg p-2 h-48" placeholder="例如：遇到斜面問題，第一步先畫力圖，第二步分解重力..." />
+              </div>
+              <button type="submit" disabled={isSaving} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                {isSaving ? "儲存中..." : "存入 AI 大腦"}
+              </button>
+            </form>
           </div>
-        </div>
 
-        {/* 錯題清單表格 */}
-        <div className="bg-gray-800 rounded-2xl shadow-xl border border-gray-700 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-950 text-gray-400 text-sm tracking-wider uppercase">
-                  <th className="p-4 font-semibold">時間</th>
-                  <th className="p-4 font-semibold">學生姓名</th>
-                  <th className="p-4 font-semibold">科目</th>
-                  <th className="p-4 font-semibold w-1/3">原始問題</th>
-                  <th className="p-4 font-semibold text-center">附圖</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700 text-gray-300">
-                {vaultData.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-750 transition-colors">
-                    <td className="p-4 whitespace-nowrap text-sm text-gray-400">
-                      {new Date(item.timestamp).toLocaleDateString()}
-                    </td>
-                    <td className="p-4 font-medium text-white flex items-center gap-2">
-                      👤 {item.userName}
-                    </td>
-                    <td className="p-4">
-                      <span className="px-3 py-1 bg-gray-700 text-xs rounded-full border border-gray-600 font-semibold">
-                        {item.subject}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="max-w-xs truncate" title={item.question}>
-                        {item.question}
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      {item.images && item.images.length > 0 ? "📷 有" : "-"}
-                    </td>
-                  </tr>
-                ))}
-                {vaultData.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="p-10 text-center text-gray-500">
-                      目前社群庫還沒有任何錯題紀錄喔！
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          {/* 右側：已儲存的知識庫 */}
+          <div className="lg:col-span-2 space-y-4">
+            <h2 className="text-xl font-bold mb-4">📚 已載入的知識 ({knowledgeList.length} 筆)</h2>
+            {knowledgeList.map(item => (
+              <div key={item.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-xs font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded mr-2">{item.subject}</span>
+                    <span className="font-bold text-gray-800">{item.title}</span>
+                  </div>
+                  <button onClick={() => handleDelete(item.id)} className="text-red-400 hover:text-red-600 text-sm">🗑️</button>
+                </div>
+                <p className="text-sm text-gray-600 line-clamp-3 mt-2 whitespace-pre-wrap">{item.content}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
