@@ -83,14 +83,58 @@ function ChatContent() {
       alert("✅ 已加入錯題本");
     } catch (err) { alert("❌ 儲存失敗"); }
   };
-
-  const handleImageChange = (e) => {
+// 🚀 升級版：加入圖片自動壓縮功能
+  const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
-    Promise.all(files.map(file => new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    }))).then(setImagesBase64);
+    
+    const promises = files.map((file) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            
+            // 🎯 設定最大長寬 (1024px 對 AI 辨識文字已經非常清晰)
+            const MAX_WIDTH = 1024;
+            const MAX_HEIGHT = 1024;
+            let width = img.width;
+            let height = img.height;
+
+            // 等比例計算新尺寸
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width *= MAX_HEIGHT / height;
+                height = MAX_HEIGHT;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            
+            // 將圖片畫入畫布中並進行壓縮
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // 🎯 轉換為 JPEG 格式，並將畫質壓縮至 70% (0.7)
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+            resolve(compressedBase64);
+          };
+          // 載入讀取到的圖片來源
+          img.src = event.target.result;
+        };
+        // 讀取原始檔案
+        reader.readAsDataURL(file);
+      });
+    });
+
+    const results = await Promise.all(promises);
+    setImagesBase64(results); // 將壓縮後的輕量級 Base64 存入 State
   };
 
   const handleSendMessage = async (e) => {
