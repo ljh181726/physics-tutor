@@ -25,6 +25,36 @@ export default function ChatPage() {
 
 // 2. 實際的聊天室內核
 function ChatRoom() {
+  // 1. 在 ChatRoom 函式頂端加入這段儲存邏輯
+const saveToNotebook = async (msg) => {
+  if (!user) return;
+
+  try {
+    const notebookData = {
+      uid: user.uid,
+      userName: user.displayName,
+      subject: subject,
+      // 因為訊息紀錄是一來一往，所以要抓取上一個使用者的提問
+      question: "已儲存的提問內容", // 這裡待會會用更精確的方式抓
+      answer: msg.content,
+      timestamp: Date.now(),
+      isPublic: true // 預設分享給全網
+    };
+
+    // 存入使用者的錯題本
+    await addDoc(collection(db, `users/${user.uid}/wrong_questions`), notebookData);
+    
+    // 如果同意，同時存入社群庫
+    if (notebookData.isPublic) {
+      await addDoc(collection(db, "community_vault"), notebookData);
+    }
+    
+    alert("✅ 成功加入錯題本！");
+  } catch (err) {
+    console.error("儲存失敗：", err);
+    alert("❌ 儲存失敗");
+  }
+};
   const searchParams = useSearchParams();
   const router = useRouter();
   const subject = searchParams.get("subject") || "physics"; // 預設物理
@@ -164,7 +194,7 @@ function ChatRoom() {
     } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { role: "model", content: `❌ 老師開小差了：${error.message}`, timestamp: Date.now() }
+        { role: "model", content: `❌ 老師壞了：${error.message}`, timestamp: Date.now() }
       ]);
     } finally {
       setIsSending(false);
