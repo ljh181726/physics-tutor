@@ -54,11 +54,12 @@ function DashboardContent() {
     return () => unsubscribe();
   }, [subject, router]);
 
-  const handleOpenNewThread = async () => {
+ const handleOpenNewThread = async () => {
     if (!user) return;
     try {
       const threadRef = await addDoc(collection(db, "threads"), {
         uid: user.uid,
+        userName: user.displayName || "匿名同學", // 🚀 新增這行：記錄是誰開的房
         subject: subject,
         title: `新題目... ${new Date().toLocaleDateString()}`,
         timestamp: Date.now()
@@ -66,7 +67,6 @@ function DashboardContent() {
       router.push(`/chat/${threadRef.id}?subject=${subject}`);
     } catch (err) { alert("無法建立新對話"); }
   };
-
   // 🗑️ 刪除對話
   const handleDeleteThread = async (e, threadId) => {
     e.stopPropagation();
