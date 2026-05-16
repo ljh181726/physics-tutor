@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, orderBy, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, addDoc, doc, writeBatch } from "firebase/firestore";
 
 const SUBJECT_MAP = {
   math: { name: "📐 高中數學", color: "bg-red-600" },
@@ -26,7 +26,6 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  // 🛡️ 防禦防護：如果參數是空的，或者亂打，一律強制當作物理 physics
   const rawSubject = searchParams.get("subject") || "physics";
   const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
   const subjectInfo = SUBJECT_MAP[subject];
@@ -35,6 +34,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [threads, setThreads] = useState([]);
 
+  // 讀取對話目錄
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) return router.push("/");
@@ -59,6 +59,7 @@ function DashboardContent() {
     return () => unsubscribe();
   }, [subject, router]);
 
+  // ➕ 建立新題目房間
   const handleOpenNewThread = async () => {
     if (!user) return;
     try {
@@ -70,6 +71,41 @@ function DashboardContent() {
       });
       router.push(`/chat/${threadRef.id}?subject=${subject}`);
     } catch (err) { alert("無法建立新題目室：" + err.message); }
+  };
+
+  // 🗑️ 核心功能：刪除對話執行緒以及該房間內的所有聊天紀錄
+  const handleDeleteThread = async (e, threadId) => {
+    // 🚀 關鍵：防止點擊刪除按鈕時，觸發父層卡片的點擊事件（避免跳轉進對話室）
+    e.stopPropagation();
+
+    if (!confirm("確定要刪除這個對話嗎？\n此動作將同時清空該題目的所有追問紀錄，且無法復原。")) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // 1. 刪除 threads 集合中的對話卡片文件
+      batch.delete(doc(db, "threads", threadId));
+
+      // 2. 撈出對應這個 threadId 的所有 chats 訊息紀錄
+      const chatsQuery = query(collection(db, "chats"), where("threadId", "==", threadId));
+      const chatsSnapshot = await getDocs(chatsQuery);
+      
+      // 3. 把所有的訊息也加入刪除批次
+      chatsSnapshot.docs.forEach((chatDoc) => {
+        batch.delete(doc(db, "chats", chatDoc.id));
+      });
+
+      // 執行批次刪除
+      await batch.commit();
+
+      // 4. 更新前端 UI 狀態
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+      alert("對話已成功刪除！");
+
+    } catch (err) {
+      console.error("刪除失敗:", err);
+      alert("刪除失敗：" + err.message);
+    }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">確認目錄中...</div>;
@@ -102,13 +138,23 @@ function DashboardContent() {
               <div 
                 key={thread.id} 
                 onClick={() => router.push(`/chat/${thread.id}?subject=${subject}`)}
-                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all flex justify-between items-center"
+                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all flex justify-between items-center group"
               >
                 <div>
                   <h3 className="font-bold text-gray-800 text-lg">{thread.title}</h3>
                   <p className="text-sm text-gray-400 mt-1">{new Date(thread.timestamp).toLocaleString()}</p>
                 </div>
-                <div className="text-blue-500 font-bold">繼續追問 ➔</div>
+                
+                <div className="flex items-center gap-4">
+                  {/* 🗑️ 刪除按鈕 (平時透明度低，滑鼠移入卡片時變鮮豔) */}
+                  <button
+                    onClick={(e) => handleDeleteThread(e, thread.id)}
+                    className="text-red-400 hover:text-red-600 text-sm font-semibold p-2 rounded-xl hover:bg-red-50 transition-colors opacity-60 group-hover:opacity-100"
+                  >
+                    🗑️ 刪除對話
+                  </button>
+                  <div className="text-blue-500 font-bold hidden sm:block">繼續追問 ➔</div>
+                </div>
               </div>
             ))}
           </div>
