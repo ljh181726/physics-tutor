@@ -85,17 +85,16 @@ export default function NotebookPage() {
     }
   };
 
-  // 🚀 核心功能：從錯題本發起追問
-  const startFollowUp = async (item) => {
-    if (!user) return;
-    try {
-      // 1. 建立一個新房間
-      const threadRef = await addDoc(collection(db, "threads"), {
-        uid: user.uid,
-        subject: item.subject,
-        title: `追問：${item.question.substring(0, 15)}...`,
-        timestamp: Date.now()
-      });
+ // 🚀 核心修改：直接跳回原始房間
+  const startFollowUp = (item) => {
+    if (item.threadId) {
+      // 如果這題有記錄到房間 ID，直接跳回去
+      router.push(`/chat/${item.threadId}?subject=${item.subject}`);
+    } else {
+      // 防呆：如果是以前存的舊錯題（沒有 ID）
+      alert("這題是較早儲存的錯題，沒有紀錄到原始房間，請回到目錄開新房間發問！");
+    }
+  };
 
       // 2. 把歷史提問跟解答塞進去當上下文
       await addDoc(collection(db, "chats"), {
