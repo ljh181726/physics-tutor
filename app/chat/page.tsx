@@ -85,7 +85,7 @@ function DashboardContent() {
   // ✏️ 重新命名
   const handleRenameThread = async (e, threadId, oldTitle) => {
     e.stopPropagation();
-    const newTitle = prompt("请输入新的題目名稱：", oldTitle);
+    const newTitle = prompt("請輸入新名稱：", oldTitle);
     if (!newTitle || newTitle.trim() === "" || newTitle === oldTitle) return;
     try {
       await updateDoc(doc(db, "threads", threadId), { title: newTitle });
