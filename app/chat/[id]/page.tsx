@@ -19,7 +19,7 @@ const SUBJECT_MAP = {
   biology: { name: "🧬 高中生物", color: "bg-purple-600" },
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
-const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
+
 export default function ThreadChatRoom() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
@@ -33,9 +33,9 @@ function ChatContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   
-  const threadId = params.id;
+  const threadId = params.id as string;
   
-  // 🛡️ 雙重防禦防護：在打包編譯預渲染時，確保 subjectInfo 絕對不可能是 undefined
+  // 🛡️ 雙重防禦防護
   const rawSubject = searchParams.get("subject") || "physics";
   const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
   const subjectInfo = SUBJECT_MAP[subject];
@@ -45,27 +45,40 @@ function ChatContent() {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [imagesBase64, setImagesBase64] = useState([]);
+  // 🚀 修正：State 必須寫在組件內部
+  const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-    // ... 前面的讀取 chats 邏輯保持不變 ...
-    
-    // 🚀 新增：抓取這個科目的專屬講義庫
-    try {
-      const kbQuery = query(collection(db, "knowledge_base"), where("subject", "==", subject));
-      const kbSnapshot = await getDocs(kbQuery);
-      // 把所有講義內容合併成一大段純文字
-      const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
-      setKnowledgeBaseText(kbTexts);
-    } catch (err) { console.error("讀取知識庫失敗", err); }
-    
-  });
-  return () => unsubscribe();
-}, [threadId, router, subject]);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) return router.push("/");
+      setUser(currentUser);
+
+      // 讀取歷史訊息
+      try {
+        const q = query(
+          collection(db, "chats"),
+          where("threadId", "==", threadId),
+          orderBy("timestamp", "asc")
+        );
+        const querySnapshot = await getDocs(q);
+        setMessages(querySnapshot.docs.map(doc => doc.data()));
+      } catch (err) { console.error("讀取失敗：", err.message); }
+
+      // 🚀 抓取這個科目的專屬講義庫
+      try {
+        const kbQuery = query(collection(db, "knowledge_base"), where("subject", "==", subject));
+        const kbSnapshot = await getDocs(kbQuery);
+        const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
+        setKnowledgeBaseText(kbTexts);
+      } catch (err) { console.error("讀取知識庫失敗", err); }
+      
+    });
+    return () => unsubscribe();
+  }, [threadId, router, subject]);
 
   const saveToNotebook = async (msg, index) => {
     if (!user) return;
@@ -83,7 +96,8 @@ function ChatContent() {
       alert("✅ 已加入錯題本");
     } catch (err) { alert("❌ 儲存失敗"); }
   };
-// 🚀 升級版：加入圖片自動壓縮功能
+
+  // 🚀 升級版：加入圖片自動壓縮功能
   const handleImageChange = async (e) => {
     const files = Array.from(e.target.files);
     
@@ -95,46 +109,34 @@ function ChatContent() {
           img.onload = () => {
             const canvas = document.createElement("canvas");
             
-            // 🎯 設定最大長寬 (1024px 對 AI 辨識文字已經非常清晰)
             const MAX_WIDTH = 1024;
             const MAX_HEIGHT = 1024;
             let width = img.width;
             let height = img.height;
 
-            // 等比例計算新尺寸
             if (width > height) {
-              if (width > MAX_WIDTH) {
-                height *= MAX_WIDTH / width;
-                width = MAX_WIDTH;
-              }
+              if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
             } else {
-              if (height > MAX_HEIGHT) {
-                width *= MAX_HEIGHT / height;
-                height = MAX_HEIGHT;
-              }
+              if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
             }
 
             canvas.width = width;
             canvas.height = height;
             
-            // 將圖片畫入畫布中並進行壓縮
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, width, height);
 
-            // 🎯 轉換為 JPEG 格式，並將畫質壓縮至 70% (0.7)
             const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
             resolve(compressedBase64);
           };
-          // 載入讀取到的圖片來源
           img.src = event.target.result;
         };
-        // 讀取原始檔案
         reader.readAsDataURL(file);
       });
     });
 
     const results = await Promise.all(promises);
-    setImagesBase64(results); // 將壓縮後的輕量級 Base64 存入 State
+    setImagesBase64(results);
   };
 
   const handleSendMessage = async (e) => {
@@ -160,7 +162,8 @@ function ChatContent() {
           subject, 
           history: messages, 
           threadId,
-          userName: user?.displayName
+          userName: user?.displayName,
+          knowledge: knowledgeBaseText // 🚀 將講義庫一起帶過去
         })
       });
       const data = await response.json();
@@ -168,6 +171,8 @@ function ChatContent() {
         const aiMessage = { uid: user.uid, subject, role: "model", content: data.text, timestamp: Date.now(), threadId };
         setMessages(prev => [...prev, aiMessage]);
         await addDoc(collection(db, "chats"), aiMessage);
+      } else {
+        throw new Error(data.error);
       }
     } catch (error) {
       setMessages(prev => [...prev, { role: "model", content: `❌ 錯誤：${error.message}`, timestamp: Date.now() }]);
