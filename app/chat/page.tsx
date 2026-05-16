@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, addDoc, query, where, orderBy, getDocs } from "firebase/firestore";
+
+// --- 🚀 新增：Markdown 與 數學公式渲染套件 ---
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -135,16 +137,16 @@ function ChatRoom() {
     setIsSending(true);
 
     try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        prompt: userPrompt, 
-        imagesBase64: currentImages, 
-        subject: subject,
-        history: messages // 🚀 這裡把整串對話傳過去！
-      })
-    });
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          prompt: userPrompt, 
+          imagesBase64: currentImages, 
+          subject: subject,
+          history: messages // 🚀 傳送歷史紀錄，實現連續對話
+        })
+      });
       const data = await response.json();
 
       if (response.ok) {
@@ -173,56 +175,4 @@ function ChatRoom() {
     <div className="flex flex-col h-screen bg-gray-50">
       <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/")} className="hover:opacity-80 text-xl">🏠</button>
-          <h1 className="text-xl font-bold">{subjectInfo.name} 輔導教室</h1>
-        </div>
-        <span className="text-sm opacity-90">{user?.displayName} 同學</span>
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-        {messages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-3xl rounded-2xl p-4 shadow-sm relative group ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-200"}`}>
-              {msg.role === "model" && (
-                <button onClick={() => saveToNotebook(msg, index)} className="absolute -top-3 -right-3 bg-yellow-400 text-white p-2 rounded-full shadow hover:bg-yellow-500 hover:scale-110 transition-transform opacity-0 group-hover:opacity-100 z-10 text-xs">⭐</button>
-              )}
-              <div className="whitespace-pre-wrap break-words">
-                {msg.content.includes("<svg") ? (
-                  <div dangerouslySetInnerHTML={{ __html: msg.content }} className="overflow-x-auto py-2" />
-                ) : (
-                  msg.content
-                )}
-              </div>
-              {msg.images && msg.images.map((img, imgIdx) => (
-                <img key={imgIdx} src={img} alt="題目" className="mt-2 max-h-80 rounded-lg shadow-sm border border-white/20" />
-              ))}
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <footer className="p-4 bg-white border-t border-gray-200">
-        <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto space-y-2">
-          {imagesBase64.length > 0 && (
-            <div className="flex gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-              {imagesBase64.map((img, idx) => (
-                <div key={idx} className="relative">
-                  <img src={img} alt="預覽" className="w-16 h-16 object-cover rounded border" />
-                  <button type="button" onClick={() => setImagesBase64([])} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs">×</button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-3 items-center">
-            <label className="cursor-pointer bg-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors">
-              📷<input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-            </label>
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="輸入問題..." className="flex-1 border border-gray-300 rounded-full px-5 py-3 focus:outline-none focus:border-blue-500" disabled={isSending} />
-            <button type="submit" disabled={isSending} className={`px-6 py-3 rounded-full text-white font-medium ${isSending ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>{isSending ? "思考中" : "發問"}</button>
-          </div>
-        </form>
-      </footer>
-    </div>
-  );
-}
+          <button onClick={() => router.push("/")} className="hover:opacity-80 text
