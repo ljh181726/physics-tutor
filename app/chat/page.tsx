@@ -5,6 +5,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, addDoc, query, where, orderBy, getDocs } from "firebase/firestore";
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
+import 'katex/dist/katex.min.css';
 
 const SUBJECT_MAP = {
   math: { name: "📐 高中數學", color: "bg-red-600" },
@@ -130,12 +135,16 @@ function ChatRoom() {
     setIsSending(true);
 
     try {
-      await addDoc(collection(db, "chats"), userMessage);
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userPrompt, imagesBase64: currentImages, subject: subject })
-      });
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        prompt: userPrompt, 
+        imagesBase64: currentImages, 
+        subject: subject,
+        history: messages // 🚀 這裡把整串對話傳過去！
+      })
+    });
       const data = await response.json();
 
       if (response.ok) {
