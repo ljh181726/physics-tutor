@@ -23,13 +23,12 @@ function DashboardContent() {
   const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
   const subjectInfo = SUBJECT_MAP[subject];
 
-  const [user, setUser] = useState(null);
+ const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [threads, setThreads] = useState([]);
 
-  // 🚀 管理員判斷 (請換成你的 Email)
-  const ADMIN_UID = "xTpyc18UxKWQFW2gcVxGvIC7rYV2";
-  const isAdmin = user?.uid === ADMIN_UID; 
+  // 🚀 直接用 Email 判斷，只要是你登入，按鈕就會出現
+  const isAdmin = user?.email === "ljh181726@gmail.com";
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
