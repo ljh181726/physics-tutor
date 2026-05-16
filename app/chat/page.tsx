@@ -36,7 +36,7 @@ function DashboardContent() {
       
       try {
         const q = query(
-          collection(db, "threads"), // 我們現在從 threads 集合抓資料
+          collection(db, "threads"),
           where("uid", "==", currentUser.uid),
           where("subject", "==", subject),
           orderBy("timestamp", "desc")
@@ -45,8 +45,11 @@ function DashboardContent() {
         const history = [];
         querySnapshot.forEach((doc) => history.push({ id: doc.id, ...doc.data() }));
         setThreads(history);
-      } catch (err) { console.error("讀取題目目錄失敗：", err.message); }
-      setLoading= (false);
+      } catch (err) { 
+        console.error("讀取題目目錄失敗：", err.message); 
+      }
+      // 這裡就是剛才報錯的地方，確保括號正確
+      setLoading(false); 
     });
     return () => unsubscribe();
   }, [subject, router]);
