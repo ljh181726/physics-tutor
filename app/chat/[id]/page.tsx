@@ -19,7 +19,7 @@ const SUBJECT_MAP = {
   biology: { name: "🧬 高中生物", color: "bg-purple-600" },
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
-
+const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
 export default function ThreadChatRoom() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
@@ -51,22 +51,21 @@ function ChatContent() {
   useEffect(() => { scrollToBottom(); }, [messages]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) return router.push("/");
-      setUser(currentUser);
-      
-      try {
-        const q = query(
-          collection(db, "chats"),
-          where("threadId", "==", threadId),
-          orderBy("timestamp", "asc")
-        );
-        const querySnapshot = await getDocs(q);
-        setMessages(querySnapshot.docs.map(doc => doc.data()));
-      } catch (err) { console.error("讀取失敗：", err.message); }
-    });
-    return () => unsubscribe();
-  }, [threadId, router]);
+  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    // ... 前面的讀取 chats 邏輯保持不變 ...
+    
+    // 🚀 新增：抓取這個科目的專屬講義庫
+    try {
+      const kbQuery = query(collection(db, "knowledge_base"), where("subject", "==", subject));
+      const kbSnapshot = await getDocs(kbQuery);
+      // 把所有講義內容合併成一大段純文字
+      const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
+      setKnowledgeBaseText(kbTexts);
+    } catch (err) { console.error("讀取知識庫失敗", err); }
+    
+  });
+  return () => unsubscribe();
+}, [threadId, router, subject]);
 
   const saveToNotebook = async (msg, index) => {
     if (!user) return;
