@@ -106,7 +106,7 @@ function DashboardContent() {
           {/* 🚀 管理員按鈕回歸 */}
           {isAdmin && (
             <button 
-              onClick={() => router.push("/admin")} 
+              onClick={() => router.push("/admin/dashboard")}
               className="bg-white/20 hover:bg-white/40 px-3 py-1 rounded-lg text-sm font-bold border border-white/50"
             >
               ⚙️ 管理後台
