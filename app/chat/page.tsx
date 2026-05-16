@@ -6,7 +6,7 @@ import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, addDoc, query, where, orderBy, getDocs } from "firebase/firestore";
 
-// --- 🚀 新增：Markdown 與 數學公式渲染套件 ---
+// --- Markdown 與 數學公式渲染套件 ---
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -144,7 +144,7 @@ function ChatRoom() {
           prompt: userPrompt, 
           imagesBase64: currentImages, 
           subject: subject,
-          history: messages // 🚀 傳送歷史紀錄，實現連續對話
+          history: messages 
         })
       });
       const data = await response.json();
@@ -180,3 +180,13 @@ function ChatRoom() {
         </div>
         <span className="text-sm opacity-90">{user?.displayName} 同學</span>
       </header>
+
+      {/* 聊天紀錄顯示區 */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+        {messages.map((msg, index) => (
+          <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-3xl rounded-2xl p-4 shadow-sm relative group ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-200"}`}>
+              
+              {/* ⭐ 錯題儲存按鈕 */}
+              {msg.role === "model" && (
+                <button onClick={() => saveToNotebook(msg, index)} className="absolute -top-3 -right-3 bg-yellow-400 text-white p-2 rounded-full shadow hover:bg-yellow-500 hover:scale-110 transition-transform opacity-0 group-hover:opacity-10
