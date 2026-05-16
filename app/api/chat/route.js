@@ -16,32 +16,32 @@ const SYSTEM_INSTRUCTIONS = {
 2. 解題時請逐步說明定理（如：算幾不等式、餘弦定理）的運用時機。
 3. 數學公式：行內用 $...$，獨立用 $$...$$。
 4. 段落之間請多留一個空行。
-5.SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
+5. SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
 
   chemistry: `你是一位充滿熱情的高中化學老師。
 1. 解答時請詳細列出化學反應式，並說明平衡係數的過程。
 2. 涉及到沉澱表、電子組態或週期表趨勢時，請條列式整理。
 3. 公式與分子式：行內用 $...$，獨立用 $$...$$。
-4.SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
+4. SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
 
   biology: `你是一位細心的高中生物老師。
 1. 擅長用邏輯觀念解釋生理機制與生態系統，而非死背。
 2. 請多利用條列式或繁體中文表格來比較容易混淆的名詞（如：減數分裂與有絲分裂）。
-3.SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
+3. SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`,
 
   earth: `你是一位博學的高中地科老師。
 1. 負責解答天文、大氣、地質與海洋的問題。
 2. 解釋空間觀念（如：天球、板塊運動）時，請盡可能詳細描繪其立體結構。
-3.SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`
+3. SVG 繪圖：必須包含 viewBox 屬性，寬度 100%，高度 auto`
 };
 
 export async function POST(req) {
   try {
-    // 🚀 新增接收參數：subject (科目)
-    const { imagesBase64, prompt, subject } = await req.json();
+    // 🚀 接收所有必要參數（包含科目、當前問題、歷史紀錄與圖片）
+    const { imagesBase64, prompt, subject, history } = await req.json();
     console.log(`[${subject || '未指定科目'}] 收到提問：`, prompt);
 
-    // 轉送給 Cloudflare Webhook (保持原本的 Discord 監控功能)
+    // 📢 轉送給 Discord Webhook 進行監控
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
     if (discordUrl) {
       fetch(discordUrl, {
@@ -51,32 +51,50 @@ export async function POST(req) {
           content: `🔔 **AI 平台監控 [科目: ${subject || '通用'}]**\n**提問：** ${prompt}`,
           images: imagesBase64 
         })
-      }).catch(() => {});
+      }).catch((err) => console.error("Discord 監控發送失敗:", err));
     }
 
-    // 🎯 根據前端傳來的科目，動態決定 AI 的人格
+    // 🎯 根據科目決定人設（預設為物理）
     const selectedInstruction = SYSTEM_INSTRUCTIONS[subject] || SYSTEM_INSTRUCTIONS['physics'];
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    // 初始化模型並直接帶入系統指令 (System Instruction)
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3-flash-preview', // 可依需求調整
+      systemInstruction: selectedInstruction 
+    });
 
-    const parts = [
-      { text: selectedInstruction + "\n\n現在請回答學生的問題：" + prompt }
-    ];
+    // 🚀 將前端傳入的歷史紀錄轉換為 Gemini 官方指定的 Chat 格式
+    const chatHistory = (history || []).map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }]
+    }));
 
-    // 處理圖片
+    // 建立聊天工作階段 (保有上下文記憶)
+    const chat = model.startChat({
+      history: chatHistory,
+    });
+
+    // 準備當前對話的內容
+    const currentParts = [{ text: prompt }];
+    
+    // 🖼️ 處理圖片（整合安全的 MimeType 解析邏輯）
     if (imagesBase64 && Array.isArray(imagesBase64)) {
       imagesBase64.forEach((imgData) => {
         if (imgData.includes(',')) {
           const mimeType = imgData.split(';')[0].split(':')[1];
           const base64Data = imgData.split(',')[1];
-          parts.push({
-            inlineData: { data: base64Data, mimeType: mimeType || "image/jpeg" },
+          currentParts.push({
+            inlineData: { 
+              data: base64Data, 
+              mimeType: mimeType || "image/jpeg" 
+            },
           });
         }
       });
     }
 
-    const result = await model.generateContent(parts);
+    // 發送目前訊息（包含圖片）並取得多輪對話回應
+    const result = await chat.sendMessage(currentParts);
     const responseText = result.response.text();
 
     return NextResponse.json({ text: responseText });
