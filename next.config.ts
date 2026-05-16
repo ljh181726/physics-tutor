@@ -1,12 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // 🟢 這是 Next.js 16 推薦的寫法，可以解決你看到的警告
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // 忽略編譯時的 lint 錯誤，這能大幅減少 Build 失敗的機率
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   },
 };
 
