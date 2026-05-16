@@ -23,6 +23,19 @@ export default function ChatPage() {
 }
 
 function DashboardContent() {
+    const handleRenameThread = async (e, threadId, oldTitle) => {
+    e.stopPropagation(); // 防止點擊時跳轉進房間
+    const newTitle = prompt("✏️ 請輸入新的對話標題：", oldTitle);
+    if (!newTitle || newTitle.trim() === "" || newTitle === oldTitle) return;
+
+    try {
+      await updateDoc(doc(db, "threads", threadId), { title: newTitle });
+      // 更新畫面
+      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, title: newTitle } : t));
+    } catch (err) {
+      alert("重新命名失敗：" + err.message);
+    }
+  };
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -145,7 +158,14 @@ function DashboardContent() {
                   <p className="text-sm text-gray-400 mt-1">{new Date(thread.timestamp).toLocaleString()}</p>
                 </div>
                 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4">
+                  {/* ✏️ 重新命名按鈕 */}
+                  <button
+                    onClick={(e) => handleRenameThread(e, thread.id, thread.title)}
+                    className="text-gray-400 hover:text-blue-600 text-sm font-semibold p-2 rounded-xl hover:bg-blue-50 transition-colors opacity-60 group-hover:opacity-100"
+                  >
+                    ✏️ 改名
+                  </button>
                   {/* 🗑️ 刪除按鈕 (平時透明度低，滑鼠移入卡片時變鮮豔) */}
                   <button
                     onClick={(e) => handleDeleteThread(e, thread.id)}
