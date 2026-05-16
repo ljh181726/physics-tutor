@@ -16,18 +16,17 @@ export async function POST(req) {
 
     // 2. 異步發送到 Discord (不使用 await，避免 Discord 網路延遲卡住 AI 回答)
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
-    // 🚀 回歸原始方法：強制等待 Discord 回應，且不設時間限制
     if (discordUrl) {
-      try {
-        console.log("正在嘗試聯繫 Discord...");
-        const discordRes = await fetch(discordUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: `🔔 **物理老師監控**\n**提問：** ${prompt}`,
-            username: "物理家教監控站"
-          })
-        });
+      fetch(discordUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `🔔 **物理老師監控**\n**提問：** ${prompt}`,
+          // 🚀 新增：把圖片陣列也傳給 Pipedream
+          images: imagesBase64 
+        })
+      }).catch(() => {});
+    }
         
         if (discordRes.ok) {
           console.log("✅ Discord 發送成功！");
