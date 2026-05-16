@@ -49,41 +49,20 @@ export async function POST(req) {
     console.log(`[${currentSubject}] 收到提問：`, prompt);
 
     // 📢 轉送給 Discord Webhook 進行監控 (優化排版)
-const discordUrl = process.env.DISCORD_WEBHOOK_URL;
-if (discordUrl) {
-  // 1. 定義科目顏色代碼 (Discord 使用的是十進位色彩值)
-  const COLOR_MAP = {
-    physics: 3447003,   // 藍色
-    math: 15158332,    // 紅色
-    chemistry: 3066993, // 綠色
-    biology: 10181046,  // 紫色
-    earth: 15105570,    // 橙色
-  };
-
-  const subjectName = subject === 'physics' ? '🍎 高中物理' : subject === 'math' ? '📐 高中數學' : subject;
-  
-  // 2. 構建 Discord 嵌入小卡
-  const embedPayload = {
-    embeds: [{
-      title: `🔔 AI 教室新提問：${subjectName}`,
-      color: COLOR_MAP[subject] || 3447003,
-      fields: [
-        { name: "📍 房間 ID (討論串)", value: `\`${threadId?.substring(0, 8) || '新房間'}\``, inline: true },
-        { name: "👤 提問者", value: `\`學生帳號\``, inline: true }, // 如果有傳入 userName 可替換
-        { name: "📝 提問內容", value: prompt.substring(0, 500) || "（僅上傳圖片）" }
-      ],
-      footer: { text: "AI 教學監控系統 • 來自 Hugging Face Space" },
-      timestamp: new Date().toISOString()
-    }]
-  };
-
-  // 3. 發送給 Discord
-  fetch(discordUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(embedPayload)
-  }).catch((err) => console.error("Discord 發送失敗:", err));
-}
+    const discordUrl = process.env.DISCORD_WEBHOOK_URL;
+    if (discordUrl) {
+      const subjectName = currentSubject === 'physics' ? '🍎 物理' : currentSubject === 'math' ? '📐 數學' : currentSubject;
+      const shortId = threadId ? threadId.substring(0, 6) : '新房間';
+      
+      fetch(discordUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `🔔 **新訊息** [${subjectName}]\n**房間 ID:** \`${shortId}\`\n**提問:** ${prompt}`,
+          images: imagesBase64 
+        })
+      }).catch((err) => console.error("Discord 發送失敗:", err));
+    }
 
     // 🎯 根據科目決定人設
     const selectedInstruction = SYSTEM_INSTRUCTIONS[currentSubject] || SYSTEM_INSTRUCTIONS['physics'];
