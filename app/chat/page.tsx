@@ -28,7 +28,8 @@ function DashboardContent() {
   const [threads, setThreads] = useState([]);
 
   // 🚀 管理員判斷 (請換成你的 Email)
-  const isAdmin = user?.uid === "xTpyc18UxKWQFW2gcVxGvIC7rYV2"; 
+  const ADMIN_UID = "xTpyc18UxKWQFW2gcVxGvIC7rYV2";
+  const isAdmin = user?.uid === ADMIN_UID; 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
