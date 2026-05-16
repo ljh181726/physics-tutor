@@ -1,6 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // 🟢 加入這兩段，可以跳過編譯時的嚴格檢查
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // 🟢 這是 Next.js 16 推薦的寫法，可以解決你看到的警告
   typescript: {
     ignoreBuildErrors: true,
   },
