@@ -189,4 +189,50 @@ function ChatRoom() {
               
               {/* ⭐ 錯題儲存按鈕 */}
               {msg.role === "model" && (
-                <button onClick={() => saveToNotebook(msg, index)} className="absolute -top-3 -right-3 bg-yellow-400 text-white p-2 rounded-full shadow hover:bg-yellow-500 hover:scale-110 transition-transform opacity-0 group-hover:opacity-10
+                <button onClick={() => saveToNotebook(msg, index)} className="absolute -top-3 -right-3 bg-yellow-400 text-white p-2 rounded-full shadow hover:bg-yellow-500 hover:scale-110 transition-transform opacity-0 group-hover:opacity-100 z-10 text-xs">⭐</button>
+              )}
+
+              {/* 渲染文字、數學公式與 SVG */}
+              <div className="markdown-content prose prose-slate max-w-none prose-p:leading-relaxed">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
+
+              {/* 圖片渲染 */}
+              {msg.images && msg.images.map((img, imgIdx) => (
+                <img key={imgIdx} src={img} alt="題目" className="mt-2 max-h-80 rounded-lg shadow-sm border border-white/20" />
+              ))}
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <footer className="p-4 bg-white border-t border-gray-200">
+        <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto space-y-2">
+          {imagesBase64.length > 0 && (
+            <div className="flex gap-2 p-2 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+              {imagesBase64.map((img, idx) => (
+                <div key={idx} className="relative">
+                  <img src={img} alt="預覽" className="w-16 h-16 object-cover rounded border" />
+                  <button type="button" onClick={() => setImagesBase64([])} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-3 items-center">
+            <label className="cursor-pointer bg-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors">
+              📷<input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+            </label>
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder="輸入問題..." className="flex-1 border border-gray-300 rounded-full px-5 py-3 focus:outline-none focus:border-blue-500" disabled={isSending} />
+            <button type="submit" disabled={isSending} className={`px-6 py-3 rounded-full text-white font-medium ${isSending ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>{isSending ? "思考中" : "發問"}</button>
+          </div>
+        </form>
+      </footer>
+    </div>
+  );
+}
