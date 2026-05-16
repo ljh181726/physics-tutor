@@ -68,13 +68,13 @@ function ChatContent() {
         setMessages(querySnapshot.docs.map(doc => doc.data()));
       } catch (err) { console.error("讀取失敗：", err.message); }
 
-      // 🚀 抓取這個科目的專屬講義庫
+      // 🚀 核心修改：改為抓取該學生「個人專屬」的講義庫
       try {
-        const kbQuery = query(collection(db, "knowledge_base"), where("subject", "==", subject));
+        const kbQuery = query(collection(db, `users/${currentUser.uid}/knowledge_base`));
         const kbSnapshot = await getDocs(kbQuery);
         const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
         setKnowledgeBaseText(kbTexts);
-      } catch (err) { console.error("讀取知識庫失敗", err); }
+      } catch (err) { console.error("讀取個人知識庫失敗", err); }
       
     });
     return () => unsubscribe();
