@@ -147,7 +147,16 @@ function ChatContent() {
     const userPrompt = input;
     const currentImages = [...imagesBase64];
     const userMessage = { uid: user.uid, subject, role: "user", content: userPrompt, images: currentImages, timestamp: Date.now(), threadId };
-
+    const userMessage = { 
+      uid: user.uid, 
+      userName: user.displayName || "匿名同學", // 👈 就是漏了這一行！
+      subject, 
+      role: "user", 
+      content: userPrompt, 
+      images: currentImages, 
+      timestamp: Date.now(), 
+      threadId 
+    };
     setMessages(prev => [...prev, userMessage]);
     setInput(""); setImagesBase64([]); setIsSending(true);
 
