@@ -1,2 +1,10 @@
 @import 'katex/dist/katex.min.css';
 @import "tailwindcss";
+/* 讓 AI 生成的圖表有一個乾淨的背景框 */
+.ai-content-svg svg {
+  background: white;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin: 10px 0;
+}
