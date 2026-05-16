@@ -4,10 +4,14 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { auth, db } from "../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, addDoc, query, where, orderBy, getDocs, doc, writeBatch } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, addDoc } from "firebase/firestore";
 
 const SUBJECT_MAP = {
-  // ... 同之前
+  math: { name: "📐 高中數學", color: "bg-red-600" },
+  physics: { name: "🍎 高中物理", color: "bg-blue-600" },
+  chemistry: { name: "🧪 高中化學", color: "bg-green-600" },
+  biology: { name: "🧬 高中生物", color: "bg-purple-600" },
+  earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
 export default function ChatPage() {
@@ -21,14 +25,16 @@ export default function ChatPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const subject = searchParams.get("subject") || "physics";
-  const subjectInfo = SUBJECT_MAP[subject] || SUBJECT_MAP["physics"];
+  
+  // 🛡️ 防禦防護：如果參數是空的，或者亂打，一律強制當作物理 physics
+  const rawSubject = searchParams.get("subject") || "physics";
+  const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
+  const subjectInfo = SUBJECT_MAP[subject];
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [threads, setThreads] = useState([]);
 
-  // 1. 讀取這個科目下所有的「對話執行緒」
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) return router.push("/");
@@ -48,29 +54,25 @@ function DashboardContent() {
       } catch (err) { 
         console.error("讀取題目目錄失敗：", err.message); 
       }
-      // 這裡就是剛才報錯的地方，確保括號正確
-      setLoading(false); 
+      setLoading(false);
     });
     return () => unsubscribe();
   }, [subject, router]);
 
-  // 核心功能：開啟新題目
   const handleOpenNewThread = async () => {
     if (!user) return;
     try {
-      // 1. 在 Firestore threads 資料集建立一個空白執行緒
       const threadRef = await addDoc(collection(db, "threads"), {
         uid: user.uid,
         subject: subject,
         title: `新題目... ${new Date().toLocaleDateString()}`,
         timestamp: Date.now()
       });
-      // 2. 跳轉到這個專屬房間 (注意路徑)
       router.push(`/chat/${threadRef.id}?subject=${subject}`);
     } catch (err) { alert("無法建立新題目室：" + err.message); }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">確認目錄中...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50">確認目錄中...</div>;
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -82,9 +84,7 @@ function DashboardContent() {
         <span className="text-sm opacity-90">{user?.displayName} 同學</span>
       </header>
 
-      {/* 題目目錄區 */}
       <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
-        {/* 開啟新題目按鈕 */}
         <button 
           onClick={handleOpenNewThread}
           className="w-full py-4 mb-8 bg-white border-2 border-dashed border-gray-300 text-gray-600 font-bold rounded-2xl hover:border-blue-500 hover:text-blue-600 transition-colors shadow-sm flex items-center justify-center gap-2"
