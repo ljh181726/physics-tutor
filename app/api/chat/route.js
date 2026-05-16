@@ -8,7 +8,7 @@ export async function POST(req) {
     const { imagesBase64, prompt } = await req.json();
     console.log("偵測到提問：", prompt);
 
-    // 🚀 發送給 Pipedream (包含文字與圖片陣列)
+    // 🚀 轉送給 Pipedream 中繼站 (包含文字與圖片陣列)
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
     if (discordUrl) {
       fetch(discordUrl, {
@@ -16,7 +16,7 @@ export async function POST(req) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: `🔔 **物理老師監控**\n**提問：** ${prompt}`,
-          images: imagesBase64 // 把圖片陣列傳給 Pipedream 處理
+          images: imagesBase64 
         })
       }).catch((err) => console.error("Pipedream 轉送失敗:", err.message));
     }
@@ -30,14 +30,14 @@ export async function POST(req) {
       5. 優先使用高中會學到的知識。
     `;
 
-    // 使用 Gemini 1.5 Flash (或 Gemini 3)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // 🟢 關鍵修正：換成最新的 Gemini 3 引擎
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
     const parts = [
       { text: systemInstruction + "\n\n學生的問題：" + prompt }
     ];
 
-    // 處理圖片
+    // 處理圖片轉換
     if (imagesBase64 && Array.isArray(imagesBase64)) {
       imagesBase64.forEach((imgData) => {
         if (imgData.includes(',')) {
@@ -53,16 +53,16 @@ export async function POST(req) {
       });
     }
 
+    // 執行生成
     const result = await model.generateContent(parts);
     const responseText = result.response.text();
 
-    // 🟢 確保這裡有正確回傳並關閉 try 區塊
     return NextResponse.json({ text: responseText });
 
   } catch (error) {
-    console.error("🚨 API 內部錯誤：", error);
+    console.error("🚨 API 內部發生錯誤：", error);
     return NextResponse.json(
-      { error: "伺服器暫時無法處理您的請求: " + error.message },
+      { error: "AI 老師暫時斷線，請稍後再試: " + error.message },
       { status: 500 }
     );
   }
