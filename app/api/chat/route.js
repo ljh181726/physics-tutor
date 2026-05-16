@@ -1,6 +1,86 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
+// 🚀 新增：上傳到 Cloudflare 的小助手 (假設你已經有上傳網址)
+async function uploadToCloudflare(base64Data, fileName) {
+  try {
+    // 請將這裡換成你 Cloudflare Worker 或 R2 的上傳端點
+    const CLOUDFLARE_UPLOAD_URL = process.env.CLOUDFLARE_UPLOAD_URL; 
+    
+    // 移除 base64 的前綴
+    const pureBase64 = base64Data.split(',')[1];
+    const buffer = Buffer.from(pureBase64, 'base64');
+
+    const response = await fetch(`${CLOUDFLARE_UPLOAD_URL}/${fileName}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: buffer
+    });
+
+    if (response.ok) {
+      // 回傳圖片的公開網址
+      return `${process.env.CLOUDFLARE_PUBLIC_DOMAIN}/${fileName}`;
+    }
+  } catch (err) {
+    console.error("Cloudflare 上傳失敗:", err);
+  }
+  return null;
+}
+
+export async function POST(req) {
+  try {
+    // 🚀 新增接收：userName
+    const { imagesBase64, prompt, subject, history, threadId, userName } = await req.json();
+
+    let imageUrlForDiscord = null;
+    
+    // 🖼️ 處理圖片並上傳到 Cloudflare
+    if (imagesBase64 && imagesBase64.length > 0) {
+      const fileName = `chat-${Date.now()}.jpg`;
+      imageUrlForDiscord = await uploadToCloudflare(imagesBase64[0], fileName);
+    }
+
+    // 📢 Discord 高級嵌入小卡
+    const discordUrl = process.env.DISCORD_WEBHOOK_URL;
+    if (discordUrl) {
+      const COLOR_MAP = {
+        physics: 3447003,   // 藍色
+        math: 15158332,    // 紅色
+        chemistry: 3066993, // 綠色
+        biology: 10181046,  // 紫色
+        earth: 15105570,    // 橙色
+      };
+
+      const subjectName = {
+        physics: '🍎 高中物理',
+        math: '📐 高中數學',
+        chemistry: '🧪 高中化學',
+        biology: '🧬 高中生物',
+        earth: '🌍 高中地科'
+      }[subject] || '📖 通用科目';
+
+      const embedPayload = {
+        embeds: [{
+          title: `${subjectName} - 提問監控`,
+          color: COLOR_MAP[subject] || 3447003,
+          fields: [
+            { name: "👤 提問學生", value: `**${userName || '匿名學生'}**`, inline: true },
+            { name: "📍 討論串 ID", value: `\`${threadId?.substring(0, 8)}\``, inline: true },
+            { name: "⏰ 提問時間", value: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }), inline: true },
+            { name: "📝 問題內容", value: prompt || "（僅上傳圖片）" }
+          ],
+          image: imageUrlForDiscord ? { url: imageUrlForDiscord } : null, // 🚀 照片直接顯示在這裡！
+          footer: { text: "AI 教室管理系統" },
+          timestamp: new Date().toISOString()
+        }]
+      };
+
+      fetch(discordUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(embedPayload)
+      }).catch(() => {});
+    }
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 🚀 強烈要求 AI：SVG 裡面絕對不能寫 LaTeX 公式，必須用純文字！
