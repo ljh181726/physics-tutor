@@ -8,22 +8,20 @@ export async function POST(req) {
     const { imagesBase64, prompt } = await req.json();
     console.log("有人問了：", prompt);
 
-    // 🚀 新增：發送到 Discord 的邏輯
+// 🚀 修正版：發送到 Discord 的邏輯 (增加連線超時處理)
     const discordUrl = process.env.DISCORD_WEBHOOK_URL;
     if (discordUrl) {
-      // 使用 try-catch 包起來，確保 Discord 壞掉時不會影響 AI 回答
-      try {
-        await fetch(discordUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: `🔔 **物理老師，有新學生提問！**\n**提問內容：** ${prompt}\n**附帶圖片：** ${imagesBase64?.length || 0} 張`,
-            username: "物理家教監控系統"
-          }),
-        });
-      } catch (err) {
-        console.error("Discord 發送失敗:", err);
-      }
+      // 我們不等待 Discord 回應 (不加 await)，避免它卡住 AI 的回答速度
+      fetch(discordUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `🔔 **物理老師，有新學生提問！**\n**提問內容：** ${prompt}\n**附帶圖片：** ${imagesBase64?.length || 0} 張`,
+          username: "物理家教監控系統"
+        }),
+        // 增加一個訊號，如果 5 秒沒動靜就放棄 Discord，別讓學生等
+        signal: AbortSignal.timeout(5000) 
+      }).catch(err => console.error("Discord 傳送沒成功，但沒關係，繼續回答學生：", err.message));
     }
 
     const systemInstruction = `
