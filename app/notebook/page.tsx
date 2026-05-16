@@ -85,41 +85,14 @@ export default function NotebookPage() {
     }
   };
 
- // 🚀 核心修改：直接跳回原始房間
+// 🚀 核心功能：從錯題本發起追問 (直接跳回原本的對話房間)
   const startFollowUp = (item) => {
     if (item.threadId) {
-      // 如果這題有記錄到房間 ID，直接跳回去
+      // 只要這題有紀錄到原房間的 ID，就直接導向回去
       router.push(`/chat/${item.threadId}?subject=${item.subject}`);
     } else {
-      // 防呆：如果是以前存的舊錯題（沒有 ID）
+      // 防呆機制：如果是系統升級前存的舊題目，會跳出提醒
       alert("這題是較早儲存的錯題，沒有紀錄到原始房間，請回到目錄開新房間發問！");
-    }
-  };
-
-      // 2. 把歷史提問跟解答塞進去當上下文
-      await addDoc(collection(db, "chats"), {
-        threadId: threadRef.id,
-        uid: user.uid,
-        subject: item.subject,
-        role: "user",
-        content: `這是我在錯題本存的一題：${item.question}`,
-        images: item.images || [],
-        timestamp: Date.now() - 1000
-      });
-
-      await addDoc(collection(db, "chats"), {
-        threadId: threadRef.id,
-        uid: user.uid,
-        subject: item.subject,
-        role: "model",
-        content: item.answer || "",
-        timestamp: Date.now()
-      });
-
-      // 3. 跳轉過去
-      router.push(`/chat/${threadRef.id}?subject=${item.subject}`);
-    } catch (err) {
-      alert("建立追問失敗：" + err.message);
     }
   };
 
