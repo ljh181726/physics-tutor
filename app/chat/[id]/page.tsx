@@ -79,7 +79,7 @@ function ChatContent() {
         const kbSnapshot = await getDocs(kbQuery);
         const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
         setKnowledgeBaseText(kbTexts);
-      } catch (err) { console.error("讀取個人知識庫失敗", err); }
+      } catch (err) { console.error("讀取個人資料庫失敗", err); }
       
     });
     return () => unsubscribe();
@@ -95,7 +95,7 @@ function ChatContent() {
         content: personalNoteContent,
         timestamp: Date.now()
       });
-      alert("✅ 已加入你的個人 AI 大腦！AI 之後會參考這份筆記教你。");
+      alert("✅ 已加入你的個人 AI 資料庫！AI 之後會參考這份筆記教你。");
       setPersonalNoteTitle("");
       setPersonalNoteContent("");
       setShowNoteForm(false);
