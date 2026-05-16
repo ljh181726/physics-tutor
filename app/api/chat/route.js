@@ -4,14 +4,7 @@ import { NextResponse } from 'next/server';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const SVG_FIX_INSTRUCTION = `
-5. SVG 繪圖極重要規則：
-   - 絕對禁止在 SVG 的 <text> 標籤內使用 $...$ 或 $$...$$ 等 LaTeX 公式。
-   - 圖片中的文字請用純文字（例如：「初始位置」、「木塊」）。
-   - 如果需要標註變數（如 x1），請直接寫 x1，不要寫 LaTeX 語法。`;
-
-// 🚀 修正：把數學公式前後空行的規定加進來，避免 ReactMarkdown 渲染失敗
-const SYSTEM_INSTRUCTIONS = {
-   `5. SVG 手機端螢幕與幾何精確度嚴格規範：
+5. SVG 手機端螢幕與幾何精確度嚴格規範：
    - 畫布與響應式：必須包含 viewBox="0 0 420 350" 屬性（此為手機螢幕最佳黃金比例），style 必須設為 "width: 100%; height: auto; background-color: #F8F9FA; border-radius: 8px;"。
    - 安全留白防裁切：所有繪圖元件、坐標軸與文字，必須與畫布四個邊緣保持至少 20 像素的留白（安全區域），嚴禁任何元素貼近或超出 420x350 的邊界，以防在手機螢幕邊緣被裁切。
    - 文字長度與手機換行：SVG 文字不會自動換行。每個 <text> 標籤內的中文不可超過 10 個字，若文字過長，必須使用多個 <tspan x="..." dy="1.2em"> 進行手動分行。字體大小 font-size 統一設定為 16px，確保縮放到手機時仍清晰可讀。
