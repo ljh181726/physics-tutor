@@ -43,6 +43,9 @@ const SYSTEM_INSTRUCTIONS = {
 
 export async function POST(req) {
   try {
+     // 🚀 1. 新增接收 knowledge (講義庫內容)
+    const { imagesBase64, prompt, subject, history, threadId, userName, knowledge } = await req.json();
+    const currentSubject = subject || 'physics';
     // 🚀 接收所有必要參數（包含房間 threadId 與姓名 userName）
     const { imagesBase64, prompt, subject, history, threadId, userName } = await req.json();
     const currentSubject = subject || 'physics';
@@ -64,9 +67,19 @@ export async function POST(req) {
       }).catch((err) => console.error("Worker 轉寄失敗:", err));
     }
 
-    // 🎯 根據科目決定人設
-    const selectedInstruction = SYSTEM_INSTRUCTIONS[currentSubject] || SYSTEM_INSTRUCTIONS['physics'];
+   // 🎯 3. 神級 RAG 知識注入！
+    let selectedInstruction = SYSTEM_INSTRUCTIONS[currentSubject] || SYSTEM_INSTRUCTIONS['physics'];
+    
+    // 如果前端有傳來對應科目的講義，我們就把它掛載到 AI 的人設指令最後面
+    if (knowledge && knowledge.trim() !== "") {
+      selectedInstruction += `\n\n【老師的專屬講義與解題心法】：\n請你「絕對優先」使用以下提供的知識點、口訣或解題步驟來回答學生的問題。如果學生的問題在以下講義中有解答，請完全模仿講義的邏輯來教學：\n\n${knowledge}`;
+    }
 
+    // 🚀 4. 初始化模型 (帶入強化後的人設)
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3-flash-preview', 
+      systemInstruction: selectedInstruction 
+    });
     // 🚀 初始化模型：明確指定使用 gemini-3-flash-preview
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-3-flash-preview', 
