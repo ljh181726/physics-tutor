@@ -47,7 +47,7 @@ function ChatContent() {
   const [imagesBase64, setImagesBase64] = useState([]);
   const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
   
-  // 🚀 新增：學生個人筆記輸入狀態
+  // 🚀 學生個人筆記輸入狀態
   const [personalNoteTitle, setPersonalNoteTitle] = useState("");
   const [personalNoteContent, setPersonalNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -161,7 +161,6 @@ function ChatContent() {
     const userPrompt = input;
     const currentImages = [...imagesBase64];
 
-    // 🚀 修正：合併並正確定義 userMessage，包含姓名
     const userMessage = { 
       uid: user.uid, 
       userName: user.displayName || "匿名同學", 
@@ -188,7 +187,7 @@ function ChatContent() {
           history: messages, 
           threadId,
           userName: user?.displayName,
-          knowledge: knowledgeBaseText // 🚀 傳送個人知識庫
+          knowledge: knowledgeBaseText 
         })
       });
       const data = await response.json();
@@ -212,7 +211,7 @@ function ChatContent() {
         <span className="text-sm opacity-90 font-bold">{user?.displayName} 同學</span>
       </header>
 
-      {/* 🚀 新增：學生個人筆記/心法注入介面 */}
+      {/* 🚀 學生個人筆記/心法注入介面 */}
       <div className="bg-white border-b px-4 py-2">
         <div className="max-w-4xl mx-auto flex justify-between items-center text-xs">
           <span className="text-gray-400">💡 當前已加載 {knowledgeBaseText.split('\n\n').filter(t => t).length} 條個人筆記與講義</span>
@@ -255,41 +254,44 @@ function ChatContent() {
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
+              
               <div className="markdown-content">
                 <ReactMarkdown
-  components={{
-    // 🚀 加上這段「程式碼攔截器」
-    code({ node, inline, className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '');
-      const codeString = String(children).replace(/\n$/, '');
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]} // 🚀 補上 LaTeX 公式與原生 HTML 支持
+                  components={{
+                    // 🚀 程式碼攔截器
+                    code({ node, inline, className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const codeString = String(children).replace(/\n$/, '');
 
-      // 如果是 xml/html 且裡面有 svg 標籤，就直接畫出圖形！
-      if (!inline && (match?.[1] === 'xml' || match?.[1] === 'html') && codeString.includes('<svg')) {
-        return (
-          <div 
-            className="my-4 w-full overflow-hidden rounded-lg shadow-sm"
-            dangerouslySetInnerHTML={{ __html: codeString }} 
-          />
-        );
-      }
+                      // 如果是 xml/html 且裡面有 svg 標籤，就直接畫出圖形！
+                      if (!inline && (match?.[1] === 'xml' || match?.[1] === 'html') && codeString.includes('<svg')) {
+                        return (
+                          <div 
+                            className="my-4 w-full overflow-hidden rounded-lg shadow-sm"
+                            dangerouslySetInnerHTML={{ __html: codeString }} 
+                          />
+                        );
+                      }
 
-      // 其他普通程式碼維持原樣
-      return inline ? (
-        <code className={className} {...props}>
-          {children}
-        </code>
-      ) : (
-        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
-          <code className={className} {...props}>
-            {children}
-          </code>
-        </pre>
-      );
-    },
-  }}
->
-  {message.content}
-</ReactMarkdown>
+                      // 其他普通程式碼維持原樣
+                      return inline ? (
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        </pre>
+                      );
+                    },
+                  }}
+                >
+                  {msg.content} {/* 🚀 修正：從 message.content 改回 msg.content */}
+                </ReactMarkdown>
               </div>
               {msg.images && msg.images.map((img, i) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
             </div>
