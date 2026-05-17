@@ -26,7 +26,7 @@ const SYSTEM_INSTRUCTIONS = {
   physics: `你是一位專業且極具耐心的專業高中物理老師。
 1. 解題架構：請依序提供「核心物理觀念」、「條列式已知條件（含單位轉換）」與「詳細步驟解題」。段落之間請多留空行以利閱讀。
 2. LaTeX 渲染防錯：
-   - 行內公式（如：變數、單位）使用 $...$（例如：$v = 10 \text{ m/s}$）。
+   - 行內公式（如：變數、單位）使用 $...$（例如：$v = 10 \\text{ m/s}$）。
    - 獨立公式必須使用 $$...$$，且「$$ 符號的上方與下方都必須強制空一行」，絕對不可與前後文字黏在一起，以防 ReactMarkdown 渲染失敗。
 3. 學科優化與幾何精確：優先使用高中物理概念。繪製受力分析圖（力圖）時，力向量（箭頭）的方向必須嚴格符合受力方向，且向量長度必須與力的大小成正比；若進行力分解，分力與合力必須構成精確的矩形或直角三角形。
 4. SVG 繪圖：解答涉及受力分析、光路折射圖或運動軌跡時，必須繪製符合上述物理幾何精確度且適合手機螢幕範圍的 SVG。` + SVG_FIX_INSTRUCTION,
@@ -49,15 +49,15 @@ const SYSTEM_INSTRUCTIONS = {
 1. 解題架構：請依序提供「化學反應原理」、「平衡反應式與係數推導」與「量計與莫耳數計算」。
 2. 圖表與整理：涉及到沉澱表、電子組態、週期表趨勢、有機官能基時，請強制使用「繁體中文 Markdown 表格」進行條列式整理。
 3. LaTeX 渲染防錯：
-   - 化學分子式與行內計算使用 $...$（例如：$\text{H}_2\text{O}$）。
+   - 化學分子式與行內計算使用 $...$（例如：$\\text{H}_2\\text{O}$）。
    - 獨立計算過程與熱化學反應式請用 $$...$$，且「$$ 符號的上方與下方都必須強制空一行」，維持結構獨立。
-4. SVG 繪圖：涉及到實驗裝置圖、分子結構、溶液混合示意圖或能階圖時，必須繪製 SVG。分子結構中的鍵角必須符合實際化學幾何角度；能階圖的線段高度差必須正比於能量差（$\Delta E$）。所有元素需緊湊排列以適應手機螢幕。` + SVG_FIX_INSTRUCTION,
+4. SVG 繪圖：涉及到實驗裝置圖、分子結構、溶液混合示意圖或能階圖時，必須繪製 SVG。分子結構中的鍵角必須符合實際化學幾何角度；能階圖的線段高度差必須正比於能量差（$\\Delta E$）。所有元素需緊湊排列以適應手機螢幕。` + SVG_FIX_INSTRUCTION,
 
   biology: `你是一位善於用邏輯解釋生理機制的細心高中生物老師。
 1. 解題架構：請依序提供「生物學核心概念」、「機制流程拆解（A 觸發 B -> B 導致 C）」與「易混淆名詞比較」。
 2. 拒絕死背：著重解釋「為什麼」這個生理構造會演化出這種功能，用邏輯取代死記。
 3. 對比表格：對於容易混淆的觀念（如：減數分裂 vs 有絲分裂、DNA vs RNA），請一律使用「繁體中文 Markdown 表格」做橫向對比。
-4. SVG 繪圖：涉及到細胞構造、生理作用流程圖、孟德爾遺傳棋盤方格、生態系能量金字塔時，必須繪製 SVG。能量金字塔的各層矩形面積必須嚴格符合能量傳遞的十 counsel 律（逐層縮小約九成比例）；所有圖表與流程必須在 420x350 畫布內緊湊呈現，防止手機端溢出。` + SVG_FIX_INSTRUCTION,
+4. SVG 繪圖：涉及到細胞構造、生理作用流程圖、孟德爾遺傳棋盤方格、生態系能量金字塔時，必須繪製 SVG。能量金字塔的各層矩形面積必須嚴格符合能量傳遞的十等律（逐層縮小約九成比例）；所有圖表與流程必須在 420x350 畫布內緊湊呈現，防止手機端溢出。` + SVG_FIX_INSTRUCTION,
 
   earth: `你是一位博學且充滿探索精神的高中地科老師。
 1. 解題架構：請依序提供「空間尺度觀念（如：天球、板塊結構）」、「環境營力影響」與「現象因果總結」。
@@ -69,12 +69,11 @@ const SYSTEM_INSTRUCTIONS = {
 
 export async function POST(req) {
   try {
-    // 🚀 1. 新增接收 knowledge (講義庫內容) 並清理重複的宣告
     const { imagesBase64, prompt, subject, history, threadId, userName, knowledge } = await req.json();
     const currentSubject = subject || 'physics';
     console.log(`[${currentSubject}] 收到提問：`, prompt);
 
-    // 📢 2. 轉寄給 Cloudflare Worker (Discord 小卡與圖片)
+    // 📢 轉寄給 Cloudflare Worker (Discord 小卡與圖片)
     const cfWorkerUrl = process.env.CLOUDFLARE_UPLOAD_URL; 
     if (cfWorkerUrl) {
       fetch(cfWorkerUrl, {
@@ -90,15 +89,14 @@ export async function POST(req) {
       }).catch((err) => console.error("Worker 轉寄失敗:", err));
     }
 
-    // 🎯 3. 神級 RAG 知識注入！
+    // 🎯 神級 RAG 知識注入
     let selectedInstruction = SYSTEM_INSTRUCTIONS[currentSubject] || SYSTEM_INSTRUCTIONS['physics'];
     
-    // 如果前端有傳來對應科目的講義，我們就把它掛載到 AI 的人設指令最後面
     if (knowledge && knowledge.trim() !== "") {
       selectedInstruction += `\n\n【老師的專屬講義與解題心法】：\n請你「絕對優先」使用以下提供的知識點、口訣或解題步驟來回答學生的問題。如果學生的問題在以下講義中有解答，請完全模仿講義的邏輯來教學：\n\n${knowledge}`;
     }
 
-    // 🚀 4. 初始化模型 (嚴格指定 gemini-3-flash-preview)
+    // 🚀 初始化模型 (設定為 500 次配額的神器)
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-3.1-flash-lite', 
       systemInstruction: selectedInstruction 
@@ -127,13 +125,40 @@ export async function POST(req) {
       });
     }
 
-    const result = await chat.sendMessage(currentParts);
-    const responseText = result.response.text();
+    // 🛡️ 新增：自動重試機制 (防禦 503 與 429 錯誤)
+    let result;
+    let retries = 3; // 最多重試 3 次
+    let delay = 2000; // 初始等待 2 秒
 
+    while (retries > 0) {
+      try {
+        result = await chat.sendMessage(currentParts);
+        break; // 成功取得回應，跳出迴圈
+      } catch (error) {
+        const errorMsg = error.message || "";
+        const isBusy = error.status === 503 || error.status === 429 || errorMsg.includes('503') || errorMsg.includes('429');
+        
+        if (isBusy && retries > 1) {
+          retries--;
+          console.warn(`[伺服器忙碌] 觸發自動重試... 剩餘次數：${retries}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay += 1000; // 每次重試增加 1 秒的等待時間 (指數退避)
+        } else {
+          // 如果不是塞車問題，或是重試次數用盡，則直接拋出錯誤
+          throw error; 
+        }
+      }
+    }
+
+    const responseText = result.response.text();
     return NextResponse.json({ text: responseText });
 
   } catch (error) {
     console.error("🚨 API 內部錯誤：", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // 回傳友善的錯誤訊息給前端
+    return NextResponse.json({ 
+      error: "AI 大腦目前稍微有點塞車，請稍等幾秒鐘後再試一次！",
+      details: error.message 
+    }, { status: 500 });
   }
 }
