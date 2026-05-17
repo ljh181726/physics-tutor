@@ -256,42 +256,39 @@ function ChatContent() {
               
               <div className="markdown-content">
                 <ReactMarkdown
-                  remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]} // 🚀 已經將吃字的 rehypeRaw 移除
-                  components={{
-                    // 🚀 程式碼攔截器
-                    code({ node, inline, className, children, ...props }) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const codeString = String(children).replace(/\n$/, '');
+  remarkPlugins={[remarkMath]}
+  rehypePlugins={[rehypeKatex]} 
+  components={{
+    code({ node, inline, className, children, ...props }) {
+      const codeString = String(children).replace(/\n$/, '');
 
-                      // 如果是 xml/html 且裡面有 svg 標籤，就直接畫出圖形！
-                      if (!inline && (match?.[1] === 'xml' || match?.[1] === 'html') && codeString.includes('<svg')) {
-                        return (
-                          <div 
-                            className="my-4 w-full overflow-hidden rounded-lg shadow-sm"
-                            dangerouslySetInnerHTML={{ __html: codeString }} 
-                          />
-                        );
-                      }
+      // 🚀 關鍵修改：拿掉 xml/html 限制！只要是區塊且包含 <svg>，就直接渲染！
+      if (!inline && codeString.includes('<svg')) {
+        return (
+          <div 
+            className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center"
+            dangerouslySetInnerHTML={{ __html: codeString }} 
+          />
+        );
+      }
 
-                      // 其他普通程式碼維持原樣
-                      return inline ? (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      ) : (
-                        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        </pre>
-                      );
-                    },
-                  }}
-                >
-                  {/* 🚀 防呆機制：沒文字但有圖時，顯示提示字眼，避免對話框空掉 */}
-                  {msg.content || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
-                </ReactMarkdown>
+      // 其他普通程式碼（如 python, js）維持原樣（深色框）
+      return inline ? (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      ) : (
+        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      );
+    },
+  }}
+>
+  {msg.content || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
+</ReactMarkdown>
               </div>
               {msg.images && msg.images.map((img, i) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
             </div>
