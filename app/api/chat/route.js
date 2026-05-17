@@ -100,7 +100,7 @@ export async function POST(req) {
 
     // 🚀 4. 初始化模型 (嚴格指定 gemini-3-flash-preview)
     const model = genAI.getGenerativeModel({ 
-      model: ''gemini-2.0-flash'', 
+      model: 'gemini-2.0-flash', 
       systemInstruction: selectedInstruction 
     });
 
