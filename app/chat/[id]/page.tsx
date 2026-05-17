@@ -256,7 +256,40 @@ function ChatContent() {
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               <div className="markdown-content">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeRaw]}>{msg.content || ""}</ReactMarkdown>
+                <ReactMarkdown
+  components={{
+    // 🚀 加上這段「程式碼攔截器」
+    code({ node, inline, className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      const codeString = String(children).replace(/\n$/, '');
+
+      // 如果是 xml/html 且裡面有 svg 標籤，就直接畫出圖形！
+      if (!inline && (match?.[1] === 'xml' || match?.[1] === 'html') && codeString.includes('<svg')) {
+        return (
+          <div 
+            className="my-4 w-full overflow-hidden rounded-lg shadow-sm"
+            dangerouslySetInnerHTML={{ __html: codeString }} 
+          />
+        );
+      }
+
+      // 其他普通程式碼維持原樣
+      return inline ? (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      ) : (
+        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+          <code className={className} {...props}>
+            {children}
+          </code>
+        </pre>
+      );
+    },
+  }}
+>
+  {message.content}
+</ReactMarkdown>
               </div>
               {msg.images && msg.images.map((img, i) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
             </div>
