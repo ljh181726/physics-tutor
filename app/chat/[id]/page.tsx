@@ -25,30 +25,23 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
   const [error, setError] = useState<string>("");
   const [debugCode, setDebugCode] = useState<string>("");
 
-  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重繪閃爍
+  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重繪
   const lastFetchedCode = useRef<string>("");
 
   useEffect(() => {
-    // 關鍵防護：如果傳進來的程式碼跟上一次完全一樣，就絕對不清除狀態、也不重複請求 Kroki
-    if (code.trim() === lastFetchedCode.current.trim()) return;
+    // 🛡️ 防護：如果已有內容且代碼沒變，直接退出，絕對不重繪
+    if (svgContent && code.trim() === lastFetchedCode.current.trim()) return;
 
     async function fetchImage() {
       try {
-        // 1. 精準切割出繪圖主體
         let tikzBody = code;
         const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
-        if (match) {
-          tikzBody = match[0];
-        }
+        if (match) tikzBody = match[0];
 
-        // 2. 抓出 AI 可能使用的擴充套件
         const libraryMatch = code.match(/\\usetikzlibrary\{[^}]*\}/g);
         const extraLibs = libraryMatch ? libraryMatch.join('\n') : "";
-
-        // 3. 物理超度法：拔除中文，避免 Kroki 伺服器崩潰
         tikzBody = tikzBody.replace(/[\u4e00-\u9fa5]/g, '');
 
-        // 4. 手動組合最穩定的 LaTeX 外殼 (支援複雜物理箭頭如 -stealth)
         const latexLines = [
           "\\documentclass[tikz,border=2mm]{standalone}",
           "\\usepackage{amsmath,amssymb}",
@@ -62,23 +55,17 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
         const finalLatex = latexLines.join("\n");
         setDebugCode(finalLatex);
 
-        // 5. 使用最穩定的純文字 POST 請求
         const response = await fetch("https://kroki.io/tikz/svg", {
           method: "POST",
-          headers: {
-            "Content-Type": "text/plain",
-          },
+          headers: { "Content-Type": "text/plain" },
           body: finalLatex
         });
 
         const text = await response.text();
-
-        // 攔截 LaTeX 編譯錯誤
         if (!response.ok || text.includes("LaTeX Error") || text.includes("Undefined control sequence")) {
            throw new Error(text);
         }
 
-        // 成功取得圖表，將代碼存入記憶鎖，未來除非代碼更新否則永不重畫
         lastFetchedCode.current = code;
         setSvgContent(text);
         setError(""); 
@@ -88,22 +75,18 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
       }
     }
     
-    // 只有代碼真正變更時，才重置狀態並載入新圖表
-    setSvgContent("");
     fetchImage();
-  }, [code]);
+  }, [code]); // 依賴項為 code，由 memo 控制
 
   if (error) {
     return (
       <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block w-full overflow-hidden">
         <strong>⚠️ AI 老師畫圖失敗</strong>
-        <p className="mt-1 text-xs opacity-80 mb-2">請複製下方「送出的 LaTeX 碼」，直接丟給 AI 說：「這段語法編譯失敗，請修正」</p>
+        <p className="mt-1 text-xs opacity-80 mb-2">請複製下方「送出的 LaTeX 碼」，直接丟給 AI 修正</p>
         <details>
-          <summary className="text-xs cursor-pointer font-bold bg-red-100 p-2 rounded">點我展開錯誤細節 (工程師除錯用)</summary>
+          <summary className="text-xs cursor-pointer font-bold bg-red-100 p-2 rounded">點我展開錯誤細節</summary>
           <div className="mt-2">
-            <p className="font-bold text-xs mt-2">伺服器回傳錯誤：</p>
             <pre className="text-xs bg-red-100 p-2 rounded max-h-32 overflow-auto mb-2 whitespace-pre-wrap">{error}</pre>
-            <p className="font-bold text-xs">送出的 LaTeX 碼：</p>
             <pre className="text-xs bg-white p-2 rounded max-h-48 overflow-auto border whitespace-pre-wrap">{debugCode}</pre>
           </div>
         </details>
@@ -121,10 +104,7 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   );
-}, (prevProps, nextProps) => {
-  // 元件層防護：只要代碼純文字 trim 後一樣，就直接跳過 VDOM 重新渲染，圖表永遠不用重畫！
-  return prevProps.code.trim() === nextProps.code.trim();
-});
+}, (prevProps, nextProps) => prevProps.code.trim() === nextProps.code.trim());
 
 TikzImage.displayName = "TikzImage";
 
@@ -281,26 +261,24 @@ function ChatContent() {
     } finally { setIsSending(false); }
   };
 
-  // 🛡️ 最強字串修復：解決 AI 亂打標籤或不穿衣服的狀況
   const formatMessageContent = (text: string) => {
     if (!text) return "";
     let fixedText = text;
-    
-    // 1. 把 AI 寫錯的 ```latex 換成我們系統認得的 ```tikz
     fixedText = fixedText.replace(/```latex/g, "```tikz");
-    
-    // 2. 攔截 AI 忘記包裝的裸奔 TikZ 程式碼
     if (fixedText.includes('\\begin{tikzpicture}') && !fixedText.includes('```tikz')) {
       fixedText = fixedText.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, (match) => `\n\`\`\`tikz\n${match}\n\`\`\`\n`);
     }
-    
     return fixedText;
   };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* 🛠️ 暴力全域樣式注入：直接覆蓋掉 KaTeX 內部所有容易引發高度計算錯誤與裁切的 CSS 類名 */}
       <style jsx global>{`
+        /* 根號 padding 修正 */
+        .markdown-content .katex .sqrt {
+          padding-top: 0.3rem !important;
+          padding-bottom: 0.3rem !important;
+        }
         .markdown-content .katex-display {
           overflow-x: auto !important;
           overflow-y: visible !important;
@@ -358,9 +336,6 @@ function ChatContent() {
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
-              {/* 💡 留白大升級：
-                  - 「leading-loose」：強制調整一般文字至超寬鬆行距。
-                  - 「space-y-5」：大幅擴大段落、公式、代碼塊之間的上下留白。 */}
               <div className="markdown-content leading-loose space-y-5 text-gray-800 break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
