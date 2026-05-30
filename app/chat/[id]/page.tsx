@@ -123,7 +123,7 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
     />
   );
 }, (prevProps, nextProps) => {
-  // 元件層防護：只要代碼純文字 trim 後一樣，就直接跳過 VDOM 重新渲染，圖片不閃爍
+  // 元件層防護：只要代碼純文字 trim 後一樣，就直接跳過 VDOM 重新渲染，圖表永遠不用重畫！
   return prevProps.code.trim() === nextProps.code.trim();
 });
 
@@ -329,18 +329,82 @@ function ChatContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {/* 💡 核心優化：外層對話框移除全域 overflow-x-auto，避免與內層 KaTeX 的高度計算衝突導致裁切 */}
+            {/* 💡 核心優化：外層對話框不使用任何可能限制或裁切內容的溢出設定 */}
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
               {/* 💡 核心優化：
-                  1. 增加 leading-relaxed 與 space-y-3 擴大行與段落之間的白留空。
-                  2. 針對內部 .katex-display 公式塊實施局部橫向捲動，且使用 overflow-y-visible 搭配 py-4，釋放頂部空間，徹底防止根號壓住上方數字。*/}
-              <div className="markdown-content leading-relaxed space-y-3 [&&_.katex-display]:overflow-x-auto [&&_.katex-display]:overflow-y-visible [&&_.katex-display]:py-4 [&&_.katex-display]:my-2 [&&_.katex]:whitespace-nowrap">
+                  - 「leading-loose」：強制將行距擴大到最大（3倍行高左右），給文字之間完美的留白。
+                  - 「space-y-4」：讓 Markdown 每個段落、公式、程式碼區塊之間的距離大幅拉開。 */}
+              <div className="markdown-content leading-loose space-y-4 text-gray-800">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]} 
                   components={{
+                    // 💡 關鍵修復：攔截數學公式渲染所產生的大區塊（通常包在 p 或 div 內）
+                    p({ node, children, ...props }) {
+                      // 檢查這個段落裡面是不是包含了 KaTeX 的獨立行公式 (.katex-display)
+                      const hasKatexDisplay = React.Children.toArray(children).some(
+                        (child: any) => child?.props?.className?.includes("katex-display")
+                      );
+
+                      if (hasKatexDisplay) {
+                        return (
+                          <p 
+                            {...props} 
+                            style={{ 
+                              overflowX: "auto", 
+                              overflowY: "visible", 
+                              paddingTop: "24px", 
+                              paddingBottom: "24px",
+                              marginTop: "12px",
+                              marginBottom: "12px"
+                            }}
+                          >
+                            {children}
+                          </p>
+                        );
+                      }
+                      return <p className="mb-2" {...props}>{children}</p>;
+                    },
+                    // 💡 終極暴力修復：直接攔截所有的 span（KaTeX 主要渲染節點），強行解除垂直方向裁切
+                    span({ node, className, children, style, ...props }: any) {
+                      if (className?.includes("katex-display")) {
+                        return (
+                          <span 
+                            className={className} 
+                            {...props} 
+                            style={{ 
+                              ...style,
+                              overflowX: "auto", 
+                              overflowY: "visible", 
+                              paddingTop: "20px", 
+                              paddingBottom: "20px",
+                              display: "block",
+                              width: "100%"
+                            }}
+                          >
+                            {children}
+                          </span>
+                        );
+                      }
+                      if (className?.includes("katex")) {
+                        return (
+                          <span 
+                            className={className} 
+                            {...props} 
+                            style={{ 
+                              ...style,
+                              whiteSpace: "nowrap",
+                              overflowY: "visible"
+                            }}
+                          >
+                            {children}
+                          </span>
+                        );
+                      }
+                      return <span className={className} {...props}>{children}</span>;
+                    },
                     code({ node, inline, className, children, ...props }: any) {
                         const match = /language-(\w+)/.exec(className || '');
                         const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
