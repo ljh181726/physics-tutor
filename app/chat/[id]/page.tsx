@@ -93,7 +93,6 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
     fetchImage();
   }, [code]);
 
-  // 💡 X光除錯模式：清楚告訴你為什麼畫失敗
   if (error) {
     return (
       <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block w-full overflow-hidden">
@@ -300,6 +299,33 @@ function ChatContent() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      {/* 🛠️ 暴力全域樣式注入：直接覆蓋掉 KaTeX 內部所有容易引發高度計算錯誤與裁切的 CSS 類名 */}
+      <style jsx global>{`
+        .markdown-content .katex-display {
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          padding-top: 1.5rem !important;
+          padding-bottom: 1.5rem !important;
+          margin-top: 1rem !important;
+          margin-bottom: 1rem !important;
+          line-height: 2.5 !important;
+        }
+        .markdown-content .katex {
+          white-space: nowrap !important;
+          line-height: 2.2 !important;
+          overflow-y: visible !important;
+        }
+        .markdown-content .katex .vlist-t,
+        .markdown-content .katex .vlist,
+        .markdown-content .katex .vlist-r,
+        .markdown-content .katex .sqrt {
+          overflow: visible !important;
+        }
+        .markdown-content .katex .vlist-t2 {
+          margin-right: 0px !important;
+        }
+      `}</style>
+
       <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
         <div className="flex items-center gap-3">
           <button onClick={() => router.push(`/chat?subject=${subject}`)} className="hover:opacity-80 text-xl">🏠</button>
@@ -329,82 +355,17 @@ function ChatContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {/* 💡 核心優化：外層對話框不使用任何可能限制或裁切內容的溢出設定 */}
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
-              {/* 💡 核心優化：
-                  - 「leading-loose」：強制將行距擴大到最大（3倍行高左右），給文字之間完美的留白。
-                  - 「space-y-4」：讓 Markdown 每個段落、公式、程式碼區塊之間的距離大幅拉開。 */}
-              <div className="markdown-content leading-loose space-y-4 text-gray-800">
+              {/* 💡 留白大升級：
+                  - 「leading-loose」：強制調整一般文字至超寬鬆行距。
+                  - 「space-y-5」：大幅擴大段落、公式、代碼塊之間的上下留白。 */}
+              <div className="markdown-content leading-loose space-y-5 text-gray-800 break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]} 
                   components={{
-                    // 💡 關鍵修復：攔截數學公式渲染所產生的大區塊（通常包在 p 或 div 內）
-                    p({ node, children, ...props }) {
-                      // 檢查這個段落裡面是不是包含了 KaTeX 的獨立行公式 (.katex-display)
-                      const hasKatexDisplay = React.Children.toArray(children).some(
-                        (child: any) => child?.props?.className?.includes("katex-display")
-                      );
-
-                      if (hasKatexDisplay) {
-                        return (
-                          <p 
-                            {...props} 
-                            style={{ 
-                              overflowX: "auto", 
-                              overflowY: "visible", 
-                              paddingTop: "24px", 
-                              paddingBottom: "24px",
-                              marginTop: "12px",
-                              marginBottom: "12px"
-                            }}
-                          >
-                            {children}
-                          </p>
-                        );
-                      }
-                      return <p className="mb-2" {...props}>{children}</p>;
-                    },
-                    // 💡 終極暴力修復：直接攔截所有的 span（KaTeX 主要渲染節點），強行解除垂直方向裁切
-                    span({ node, className, children, style, ...props }: any) {
-                      if (className?.includes("katex-display")) {
-                        return (
-                          <span 
-                            className={className} 
-                            {...props} 
-                            style={{ 
-                              ...style,
-                              overflowX: "auto", 
-                              overflowY: "visible", 
-                              paddingTop: "20px", 
-                              paddingBottom: "20px",
-                              display: "block",
-                              width: "100%"
-                            }}
-                          >
-                            {children}
-                          </span>
-                        );
-                      }
-                      if (className?.includes("katex")) {
-                        return (
-                          <span 
-                            className={className} 
-                            {...props} 
-                            style={{ 
-                              ...style,
-                              whiteSpace: "nowrap",
-                              overflowY: "visible"
-                            }}
-                          >
-                            {children}
-                          </span>
-                        );
-                      }
-                      return <span className={className} {...props}>{children}</span>;
-                    },
                     code({ node, inline, className, children, ...props }: any) {
                         const match = /language-(\w+)/.exec(className || '');
                         const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
