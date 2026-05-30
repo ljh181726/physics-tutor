@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { auth, db } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -19,13 +19,19 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 終極渲染器：自帶無敵 LaTeX 外殼 + 拔除中文 + 視覺化除錯
-const TikzImage = ({ code }: { code: string }) => {
+// 🚀 終極渲染器：自帶無敵 LaTeX 外殼 + 拔除中文 + 視覺化除錯 (使用 React.memo 進行效能隔離)
+const TikzImage = React.memo(({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [debugCode, setDebugCode] = useState<string>("");
 
+  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重複發送相同請求
+  const lastFetchedCode = useRef<string>("");
+
   useEffect(() => {
+    // 關鍵防護：如果傳進來的程式碼跟上一次一樣，就絕對不清除狀態、也不重新發送 Kroki 請求
+    if (code.trim() === lastFetchedCode.current.trim()) return;
+
     async function fetchImage() {
       try {
         // 1. 精準切割出繪圖主體
@@ -72,12 +78,18 @@ const TikzImage = ({ code }: { code: string }) => {
            throw new Error(text);
         }
 
+        // 成功取得圖表，將代碼存入記憶鎖
+        lastFetchedCode.current = code;
         setSvgContent(text);
+        setError(""); // 清除先前的錯誤狀態
       } catch (err: any) {
         console.error("TikZ 渲染失敗:", err);
         setError(err.message || "Unknown Error");
       }
     }
+    
+    // 如果代碼變了，重置狀態並載入新圖表
+    setSvgContent("");
     fetchImage();
   }, [code]);
 
@@ -110,7 +122,13 @@ const TikzImage = ({ code }: { code: string }) => {
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   );
-};
+}, (prevProps, nextProps) => {
+  // 核心阻擋機制：只有當代碼內容真正被改變時，才允許 TikZ 元件重新渲染
+  return prevProps.code.trim() === nextProps.code.trim();
+});
+
+// 設定 Memo 的 DisplayName 以利除錯
+TikzImage.displayName = "TikzImage";
 
 export default function ThreadChatRoom() {
   return (
@@ -265,7 +283,7 @@ function ChatContent() {
     } finally { setIsSending(false); }
   };
 
-  // 🛡️ 最強字串修復：解決 AI 亂打標籤（例如將 ```latex 打成 ```tikz）或忘記穿衣服的狀況
+  // 🛡️ 最強字串修復：解決 AI 亂打標籤或不穿衣服的狀況
   const formatMessageContent = (text: string) => {
     if (!text) return "";
     let fixedText = text;
@@ -303,7 +321,7 @@ function ChatContent() {
           <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
             <h4 className="text-sm font-bold text-blue-800">幫你的 AI 大腦增加記憶：</h4>
             <input type="text" placeholder="筆記標題 (例如：遇到斜面摩擦力的判斷法)" value={personalNoteTitle} onChange={e => setPersonalNoteTitle(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
-            <textarea placeholder="內容 (例如：只要題目提到『等速運動』，代表合力為零...)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
+            <textarea placeholder="內容 (example)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
             <button onClick={handleSavePersonalNote} className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all">存入我的個人 AI 大腦</button>
           </div>
         )}
@@ -312,10 +330,12 @@ function ChatContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none overflow-x-auto"}`}>
+            {/* 💡 關鍵優化：對模型回覆框移除全域的 overflow-x-auto，改用正常的區塊排版避免 KaTeX 裁切 */}
+            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
-              <div className="markdown-content">
+              {/* 💡 關鍵優化：自訂內部 .katex-display 樣式，只有公式區塊能獨立橫向捲動，且留有足夠的上下 padding 讓根號完全舒展 */}
+              <div className="markdown-content [&&_.katex-display]:overflow-x-auto [&&_.katex-display]:overflow-y-hidden [&&_.katex-display]:py-3 [&&_.katex-display]:my-1 [&&_.katex]:whitespace-nowrap">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]} 
@@ -344,7 +364,6 @@ function ChatContent() {
                     },
                   }}
                 >
-                  {/* 🚀 關鍵改動：在這裡呼叫 formatMessageContent 攔截修復 TikZ 的標籤 */}
                   {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
                 </ReactMarkdown>
               </div>
