@@ -274,3 +274,5 @@ function ChatContent() {
     
     return fixedText;
   };
+
+} // <-- THIS CLOSING BRACE FOR 'ChatContent' WAS MISSING
