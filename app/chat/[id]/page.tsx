@@ -27,8 +27,6 @@ const SUBJECT_MAP = {
 
 /* ════════════════════════════════════════
    MODULE-LEVEL TIKZ CACHE
-   These never reset — they live for the entire
-   browser session regardless of React renders
 ════════════════════════════════════════ */
 const SVG_CACHE: Record<string, string>  = {};
 const ERR_CACHE: Record<string, string>  = {};
@@ -74,37 +72,23 @@ function fetchTikz(key: string): Promise<void> {
 }
 
 /* ════════════════════════════════════════
-   TikzImage
-   KEY INSIGHT: useEffect([]) fires once at mount.
-   When ReactMarkdown re-renders (parent typed),
-   it tries to create a new <TikzImage> — but
-   React reconciler sees same `key` prop and
-   REUSES the existing instance → no new mount
-   → no new useEffect → no re-fetch.
-   The `key` on <TikzImage> in MessageBubble
-   is derived from the code content, so it's
-   stable as long as the tikz code doesn't change.
+   TikzImage — 加上 React.memo 徹底防止輸入文字時重繪
 ════════════════════════════════════════ */
-function TikzImage({ code }: { code: string }) {
+const TikzImage = React.memo(({ code }: { code: string }) => {
   const key = code.trim();
 
-  // Read from cache synchronously on every render —
-  // if already cached this is instant and causes no side effects
   const [svg, setSvg] = useState<string>(() => SVG_CACHE[key] ?? "");
   const [err, setErr] = useState<string>(() => ERR_CACHE[key] ?? "");
 
   useEffect(() => {
-    // Already cached — nothing to do
     if (SVG_CACHE[key]) { setSvg(SVG_CACHE[key]); return; }
     if (ERR_CACHE[key]) { setErr(ERR_CACHE[key]); return; }
-    // Fetch (deduped by PENDING map)
+    
     fetchTikz(key).then(() => {
       if (SVG_CACHE[key]) setSvg(SVG_CACHE[key]);
       else if (ERR_CACHE[key]) setErr(ERR_CACHE[key]);
     });
-    // Empty deps: intentional. This effect runs ONCE at mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [key]);
 
   if (err) return (
     <div style={{ margin: "1rem 0", padding: "1rem", background: "#fff0f0", border: "1px solid #fca5a5", borderRadius: 12, fontSize: 13, color: "#dc2626" }}>
@@ -128,14 +112,12 @@ function TikzImage({ code }: { code: string }) {
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
-}
+}, (prev, next) => prev.code.trim() === next.code.trim());
+
+TikzImage.displayName = "TikzImage";
 
 /* ════════════════════════════════════════
    MESSAGE SEGMENTATION
-   Split content into tikz/markdown chunks
-   BEFORE passing to React, so TikzImage
-   is a real sibling element — not buried
-   inside ReactMarkdown's virtual DOM tree
 ════════════════════════════════════════ */
 type Seg = { type: "tikz"; code: string } | { type: "md"; text: string };
 
@@ -161,7 +143,7 @@ function parseSegs(raw: string): Seg[] {
 }
 
 /* ════════════════════════════════════════
-   MarkdownBlock — memoised
+   MarkdownBlock
 ════════════════════════════════════════ */
 const MarkdownBlock = React.memo(({ text }: { text: string }) => (
   <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
@@ -171,11 +153,7 @@ const MarkdownBlock = React.memo(({ text }: { text: string }) => (
 MarkdownBlock.displayName = "MarkdownBlock";
 
 /* ════════════════════════════════════════
-   MessageBubble — memoised per message.
-   onSave identity is stable (useCallback+ref)
-   so memo comparator never fails from it.
-   Typing only changes `input` state in
-   ChatContent — none of these props change.
+   MessageBubble
 ════════════════════════════════════════ */
 const MessageBubble = React.memo(
   ({ msg, idx, onSave }: { msg: any; idx: number; onSave: (msg: any, idx: number) => void }) => {
@@ -261,7 +239,6 @@ function ChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // Mutable ref — lets callbacks read fresh state without changing identity
   const live = useRef({ user, messages, knowledgeBaseText, threadId, subject });
   useEffect(() => { live.current = { user, messages, knowledgeBaseText, threadId, subject }; });
 
@@ -302,7 +279,6 @@ function ChatContent() {
     } catch (e: any) { alert("儲存失敗：" + e.message); }
   };
 
-  // Stable identity forever — reads fresh data from live ref
   const saveToNotebook = useCallback(async (msg: any, index: number) => {
     const { user, messages, subject, threadId } = live.current;
     if (!user) return;
@@ -384,17 +360,7 @@ function ChatContent() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f8fafc" }}>
 
-      {/* ── KATEX SQRT FIX ──────────────────────────────
-          The root cause: KaTeX wraps sqrt in a .vlist
-          structure where overflow:hidden is set on
-          multiple ancestors via inline style — impossible
-          to override with class selectors.
-          Solution: target the katex-html container itself
-          and force enough vertical padding so the
-          vinculum (overline) is never clipped.
-          We also increase line-height on the paragraph
-          so inline sqrt doesn't get cut off by leading.
-      ────────────────────────────────────────────────── */}
+      {/* ── KATEX & TAILWIND FIXES ──────────────────────── */}
       <style>{`
         .markdown-content .katex-display {
           overflow-x: auto !important;
@@ -423,12 +389,11 @@ function ChatContent() {
           line-height: 2.4 !important;
           margin-bottom: 0.6em !important;
         }
-        .markdown-content .katex .vlist-t,
-        .markdown-content .katex .vlist-t2,
-        .markdown-content .katex .vlist-r,
-        .markdown-content .katex .vlist,
-        .markdown-content .katex .sqrt {
-          overflow: visible !important;
+        /* 修正 Tailwind Preflight 將全域 svg 設為 block 的排版衝突 */
+        .markdown-content .katex svg {
+          display: inline !important;
+          width: auto !important;
+          height: auto !important;
         }
         .save-btn { opacity: 0 !important; }
         .save-btn:hover, *:hover > .save-btn { opacity: 1 !important; }
