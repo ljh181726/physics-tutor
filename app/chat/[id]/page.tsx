@@ -19,18 +19,20 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 終極渲染器：自帶無敵 LaTeX 外殼 + 拔除中文 + 視覺化除錯 (使用 React.memo 進行效能隔離)
+// 🚀 TikZ renderer — React.memo prevents re-render when code hasn't changed
 const TikzImage = React.memo(({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [debugCode, setDebugCode] = useState<string>("");
 
-  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重繪
+  // 🛡️ Memory lock: track last successfully fetched TikZ code
   const lastFetchedCode = useRef<string>("");
 
   useEffect(() => {
-    // 🛡️ 防護：如果已有內容且代碼沒變，直接退出，絕對不重繪
-    if (svgContent && code.trim() === lastFetchedCode.current.trim()) return;
+    const trimmed = code.trim();
+
+    // 🛡️ If we already have SVG for this exact code, skip entirely
+    if (svgContent && trimmed === lastFetchedCode.current.trim()) return;
 
     async function fetchImage() {
       try {
@@ -63,20 +65,20 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
 
         const text = await response.text();
         if (!response.ok || text.includes("LaTeX Error") || text.includes("Undefined control sequence")) {
-           throw new Error(text);
+          throw new Error(text);
         }
 
         lastFetchedCode.current = code;
         setSvgContent(text);
-        setError(""); 
+        setError("");
       } catch (err: any) {
         console.error("TikZ 渲染失敗:", err);
         setError(err.message || "Unknown Error");
       }
     }
-    
+
     fetchImage();
-  }, [code]); // 依賴項為 code，由 memo 控制
+  }, [code]);
 
   if (error) {
     return (
@@ -95,7 +97,11 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
   }
 
   if (!svgContent) {
-    return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
+    return (
+      <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">
+        🎨 老師正在精確繪圖中...
+      </span>
+    );
   }
 
   return (
@@ -132,7 +138,7 @@ function ChatContent() {
   const [isSending, setIsSending] = useState(false);
   const [imagesBase64, setImagesBase64] = useState<string[]>([]);
   const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
-  
+
   const [personalNoteTitle, setPersonalNoteTitle] = useState("");
   const [personalNoteContent, setPersonalNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -162,7 +168,6 @@ function ChatContent() {
         const kbTexts = kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n");
         setKnowledgeBaseText(kbTexts);
       } catch (err) { console.error("讀取個人資料庫失敗", err); }
-      
     });
     return () => unsubscribe();
   }, [threadId, router, subject]);
@@ -175,7 +180,7 @@ function ChatContent() {
       });
       alert("✅ 已加入你的個人 AI 資料庫！");
       setPersonalNoteTitle(""); setPersonalNoteContent(""); setShowNoteForm(false);
-      
+
       const kbQuery = query(collection(db, `users/${user.uid}/knowledge_base`), where("subject", "==", subject));
       const kbSnapshot = await getDocs(kbQuery);
       setKnowledgeBaseText(kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n"));
@@ -233,9 +238,9 @@ function ChatContent() {
     const userPrompt = input;
     const currentImages = [...imagesBase64];
 
-    const userMessage = { 
-      uid: user.uid, userName: user.displayName || "匿名同學", subject, role: "user", 
-      content: userPrompt, images: currentImages, timestamp: Date.now(), threadId 
+    const userMessage = {
+      uid: user.uid, userName: user.displayName || "匿名同學", subject, role: "user",
+      content: userPrompt, images: currentImages, timestamp: Date.now(), threadId
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -245,9 +250,9 @@ function ChatContent() {
       await addDoc(collection(db, "chats"), userMessage);
       const response = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          prompt: userPrompt, imagesBase64: currentImages, subject, 
-          history: messages, threadId, userName: user?.displayName, knowledge: knowledgeBaseText 
+        body: JSON.stringify({
+          prompt: userPrompt, imagesBase64: currentImages, subject,
+          history: messages, threadId, userName: user?.displayName, knowledge: knowledgeBaseText
         })
       });
       const data = await response.json();
@@ -274,11 +279,6 @@ function ChatContent() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <style jsx global>{`
-        /* 根號 padding 修正 */
-        .markdown-content .katex .sqrt {
-          padding-top: 0.3rem !important;
-          padding-bottom: 0.3rem !important;
-        }
         .markdown-content .katex-display {
           overflow-x: auto !important;
           overflow-y: visible !important;
@@ -292,6 +292,17 @@ function ChatContent() {
           white-space: nowrap !important;
           line-height: 2.2 !important;
           overflow-y: visible !important;
+        }
+        /* Fix: allow sqrt vinculum and radical arm to breathe without clipping numbers */
+        .markdown-content .katex .sqrt > .root {
+          margin-top: 0 !important;
+        }
+        .markdown-content .katex .sqrt-sign {
+          top: 0.1em !important;
+        }
+        .markdown-content .katex .mord.sqrt {
+          padding-top: 0.25em !important;
+          padding-bottom: 0.25em !important;
         }
         .markdown-content .katex .vlist-t,
         .markdown-content .katex .vlist,
@@ -319,7 +330,7 @@ function ChatContent() {
             {showNoteForm ? "✖ 關閉介面" : "📝 點我加入個人筆記/解題口訣"}
           </button>
         </div>
-        
+
         {showNoteForm && (
           <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
             <h4 className="text-sm font-bold text-blue-800">幫你的 AI 大腦增加記憶：</h4>
@@ -334,41 +345,57 @@ function ChatContent() {
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
-              {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
-              
+              {msg.role === "model" && (
+                <button
+                  onClick={() => saveToNotebook(msg, idx)}
+                  className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90"
+                >⭐</button>
+              )}
+
               <div className="markdown-content leading-loose space-y-5 text-gray-800 break-words">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]} 
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     code({ node, inline, className, children, ...props }: any) {
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
+                      const match = /language-(\w+)/.exec(className || '');
+                      const codeString = Array.isArray(children)
+                        ? children.join('')
+                        : String(children || '').replace(/\n$/, '');
 
-                        if (!inline && match && match[1] === 'tikz') {
-                           return <TikzImage code={codeString} />;
-                        }
-                      
-                        if (!inline && codeString.includes('<svg')) {
-                          return (
-                            <div className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center" dangerouslySetInnerHTML={{ __html: codeString }} />
-                          );
-                        }
+                      if (!inline && match && match[1] === 'tikz') {
+                        // Stable key derived from content prevents unmount/remount
+                        // when the parent re-renders due to input changes
+                        const stableKey = codeString.length + '_' + codeString.slice(0, 60);
+                        return <TikzImage key={stableKey} code={codeString} />;
+                      }
 
-                        return inline ? (
-                          <code className={className} {...props}>{children}</code>
-                        ) : (
-                          <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
-                            <code className={className} {...props}>{children}</code>
-                          </pre>
+                      if (!inline && codeString.includes('<svg')) {
+                        return (
+                          <div
+                            className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center"
+                            dangerouslySetInnerHTML={{ __html: codeString }}
+                          />
                         );
+                      }
+
+                      return inline ? (
+                        <code className={className} {...props}>{children}</code>
+                      ) : (
+                        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+                          <code className={className} {...props}>{children}</code>
+                        </pre>
+                      );
                     },
                   }}
                 >
-                  {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
+                  {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")}
                 </ReactMarkdown>
               </div>
-              {msg.images && msg.images.map((img: string, i: number) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
+
+              {msg.images && msg.images.map((img: string, i: number) => (
+                <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />
+              ))}
             </div>
           </div>
         ))}
@@ -380,7 +407,9 @@ function ChatContent() {
           {imagesBase64.length > 0 && (
             <div className="flex gap-2 p-2 bg-gray-50 rounded-xl mb-2">
               {imagesBase64.map((img, i) => (
-                <div key={i} className="relative w-16 h-16 border rounded-lg overflow-hidden shadow-inner"><img src={img} className="w-full h-full object-cover" alt="upload preview" /></div>
+                <div key={i} className="relative w-16 h-16 border rounded-lg overflow-hidden shadow-inner">
+                  <img src={img} className="w-full h-full object-cover" alt="upload preview" />
+                </div>
               ))}
             </div>
           )}
@@ -388,8 +417,18 @@ function ChatContent() {
             <label className="cursor-pointer bg-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors">
               📷<input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
             </label>
-            <input type="text" value={input} onChange={e => setInput(e.target.value)} className="flex-1 border rounded-full px-5 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="請輸入問題或拍照..." />
-            <button type="submit" disabled={isSending} className={`px-6 py-3 rounded-full font-bold shadow-md transition-all ${isSending ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}>
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              className="flex-1 border rounded-full px-5 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              placeholder="請輸入問題或拍照..."
+            />
+            <button
+              type="submit"
+              disabled={isSending}
+              className={`px-6 py-3 rounded-full font-bold shadow-md transition-all ${isSending ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}
+            >
               {isSending ? "發送中..." : "發送"}
             </button>
           </div>
