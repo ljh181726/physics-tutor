@@ -362,39 +362,35 @@ function ChatContent() {
 
       {/* ── KATEX & TAILWIND FIXES ──────────────────────── */}
       <style>{`
+        /* 1. 核心修正：只恢復行內顯示，絕不覆蓋 KaTeX 精確計算的寬高 */
+        .markdown-content .katex svg {
+          display: inline !important;
+        }
+
+        /* 2. 防止置中大公式左右被切掉，但允許上下溢出（確保根號頂部橫線正常） */
         .markdown-content .katex-display {
           overflow-x: auto !important;
           overflow-y: visible !important;
           margin: 1em 0 !important;
-        }
-        .markdown-content .katex-display > .katex {
-          overflow-y: visible !important;
         }
         .markdown-content .katex-display > .katex > .katex-html {
           overflow-y: visible !important;
           padding-top: 0.5em !important;
           padding-bottom: 0.3em !important;
         }
-        .markdown-content p .katex {
-          overflow-y: visible !important;
-        }
+
+        /* 3. 優化行內公式（如文章中的根號）的排版與垂直對齊 */
         .markdown-content p .katex > .katex-html {
-          overflow-y: visible !important;
           display: inline-block !important;
-          padding-top: 0.35em !important;
-          padding-bottom: 0.1em !important;
+          padding-top: 0.2em !important;
           vertical-align: middle !important;
         }
         .markdown-content p {
-          line-height: 2.4 !important;
+          line-height: 2.2 !important; /* 給予足夠的行高，根號才不會跟上一行擠在一起 */
           margin-bottom: 0.6em !important;
         }
-        /* 修正 Tailwind Preflight 將全域 svg 設為 block 的排版衝突 */
-        .markdown-content .katex svg {
-          display: inline !important;
-          width: auto !important;
-          height: auto !important;
-        }
+
+        /* 4. 其他功能性樣式 */
         .save-btn { opacity: 0 !important; }
         .save-btn:hover, *:hover > .save-btn { opacity: 1 !important; }
       `}</style>
