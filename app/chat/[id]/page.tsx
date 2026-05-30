@@ -19,90 +19,67 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 最終救贖版：支援中文實體標籤 + 避開 standalone 核心 Bug，保證絕不破圖
+// 🚀 最強實體防護：強制拔除中文，讓 Kroki 原生渲染純淨 TikZ
 const TikzImage = ({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
     async function fetchImage() {
       try {
-        // 1. 精準切割出繪圖主體，過濾掉 AI 亂加的所有廢話
-        let tikzBody = code;
+        // 1. 精準切割出繪圖主體
+        let cleanCode = code;
         const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
         if (match) {
-          tikzBody = match[0];
+          cleanCode = match[0];
         }
 
-        // 2. 抓出 AI 可能使用的擴充套件
-        const libraryMatch = code.match(/\\usetikzlibrary\{[^}]*\}/g);
-        const extraLibs = libraryMatch ? libraryMatch.join('\n') : "";
+        // 2. 🛡️ 物理超度法：直接拔除所有中文字元！
+        // 這是避免 Kroki 伺服器底層 LaTeX 引擎發瘋崩潰的最有效方法
+        cleanCode = cleanCode.replace(/[\u4e00-\u9fa5]/g, '');
 
-        // 3. 🛡️ 核心修復：放棄 standalone，改用 article，並載入 CJKutf8 支援物理圖中的繁體中文標籤！
-        const latexLines = [
-          "\\documentclass{article}",
-          "\\usepackage{tikz}",
-          "\\usepackage{amsmath,amssymb}",
-          "\\usepackage{pgfplots}",
-          "\\pgfplotsset{compat=1.18}",
-          "\\usepackage{CJKutf8}", // 解決中文崩潰的關鍵
-          extraLibs,
-          "\\pagestyle{empty}",
-          "\\begin{document}",
-          "\\begin{CJK}{UTF8}{bsmi}", // 開啟繁體中文支援環境
-          tikzBody,
-          "\\end{CJK}",
-          "\\end{document}"
-        ];
-        
-        // 確保移除任何可能導致 Missing document 的隱藏 BOM 字元
-        const finalLatex = latexLines.join("\n").replace(/^\uFEFF/, '');
-
-        // 4. 直接使用 text/plain 發送，避開所有 JSON 的反斜線地雷
-        const response = await fetch("https://kroki.io/tikz/svg", {
+        // 3. 不再自己包裝 LaTeX 外殼，直接把純淨的圖片丟給 Kroki 原生處理
+        const response = await fetch("https://kroki.io/", {
           method: "POST",
           headers: {
-            "Content-Type": "text/plain",
+            "Content-Type": "application/json",
+            "Accept": "image/svg+xml"
           },
-          body: finalLatex
+          body: JSON.stringify({
+            diagram_source: cleanCode,
+            diagram_type: "tikz",
+            output_format: "svg"
+          })
         });
 
         const text = await response.text();
 
-        // 攔截 Kroki 的報錯 SVG 或明碼錯誤
-        if (!response.ok || text.includes("LaTeX Error") || text.includes("Undefined control sequence")) {
-           throw new Error(text);
+        if (!response.ok || text.includes("LaTeX Error")) {
+           throw new Error("LaTeX Compilation Failed");
         }
 
         setSvgContent(text);
-      } catch (err: any) {
+      } catch (err) {
         console.error("TikZ 渲染失敗:", err);
-        setError(err.message);
+        setError(true);
       }
     }
     fetchImage();
   }, [code]);
 
-  // 如果真的又失敗，這次會把完整的錯誤細節印出來供除錯
   if (error) {
     return (
-      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block">
-        <strong>⚠️ AI 老師畫圖失敗：</strong>
-        <p className="mt-1 text-xs opacity-80">請告訴 AI：「圖表編譯失敗，請確保 TikZ 語法正確」</p>
-        <details className="mt-2">
-          <summary className="text-xs cursor-pointer font-bold">點擊查看伺服器錯誤日誌</summary>
-          <pre className="mt-2 text-xs bg-white p-2 rounded max-h-32 overflow-auto">{error}</pre>
-        </details>
+      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block text-center">
+        <strong>⚠️ 哎呀，AI 老師這張圖畫壞了！</strong>
+        <p className="mt-1 text-xs opacity-80">前端已啟動防護。請告訴 AI：「圖表出錯，請確保只使用英文與數學符號繪圖」</p>
       </div>
     );
   }
 
-  // 讀取中狀態
   if (!svgContent) {
     return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
   }
 
-  // 成功渲染
   return (
     <span
       className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block overflow-hidden"
@@ -274,7 +251,6 @@ function ChatContent() {
         <span className="text-sm opacity-90 font-bold">{user?.displayName} 同學</span>
       </header>
 
-      {/* 🚀 學生個人筆記/心法注入介面 */}
       <div className="bg-white border-b px-4 py-2">
         <div className="max-w-4xl mx-auto flex justify-between items-center text-xs">
           <span className="text-gray-400">💡 當前已加載 {knowledgeBaseText.split('\n\n').filter(t => t).length} 條個人筆記與講義</span>
@@ -306,13 +282,12 @@ function ChatContent() {
                   components={{
                     code({ node, inline, className, children, ...props }: any) {
                         const match = /language-(\w+)/.exec(className || '');
-                        // 關鍵：確保陣列正確合併，不會產生逗號
                         const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
 
                         if (!inline && match && match[1] === 'tikz') {
-                        return <TikzImage code={codeString} />;
+                           return <TikzImage code={codeString} />;
                         }
-                      // 保留原本對付漏網 SVG 的相容性支援
+                      
                       if (!inline && codeString.includes('<svg')) {
                         return (
                           <div className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center" dangerouslySetInnerHTML={{ __html: codeString }} />
