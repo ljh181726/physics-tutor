@@ -19,37 +19,39 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 終極防呆版：使用 String.raw 免疫反斜線陷阱，並改用穩定的 JSON API
+// 🚀 最終防彈版：使用陣列組合確保反斜線絕對存活，並嚴格攔截 AI 幻覺
 const TikzImage = ({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
-  const [error, setError] = useState<string>("");
-  const [debugCode, setDebugCode] = useState<string>("");
+  const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
     async function fetchImage() {
       try {
-        // 1. 強制過濾 AI 輸出的多餘外殼，只保留核心繪圖區塊
-        let tikzContent = code;
+        // 1. 精準切割出繪圖主體，過濾掉 AI 亂加的所有廢話
+        let tikzBody = code;
         const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
         if (match) {
-          tikzContent = match[0];
+          tikzBody = match[0];
         }
 
-        // 2. 獨立抓取 AI 可能生成的 \usetikzlibrary (這必須放在 preamble 裡面才不會報錯)
+        // 2. 抓出 AI 可能使用的擴充套件
         const libraryMatch = code.match(/\\usetikzlibrary\{[^}]*\}/g);
-        const extraLibraries = libraryMatch ? libraryMatch.join('\n') : "";
+        const extraLibs = libraryMatch ? libraryMatch.join('\n') : "";
 
-        // 3. 🛡️ 核心修復：使用 String.raw 保證反斜線 \ 絕對不會被 JS 吃掉！
-        const latexCode = String.raw`\documentclass[tikz,border=2mm]{standalone}
-\usepackage{amsmath,amssymb}
-${extraLibraries}
-\begin{document}
-${tikzContent}
-\end{document}`;
+        // 3. 🛡️ 核心修復：使用 Array 來組合字串，每一行的雙反斜線絕對不會被 JS 吃掉！
+        const latexLines = [
+          "\\documentclass[tikz,border=2mm]{standalone}",
+          "\\usepackage{amsmath,amssymb}",
+          "\\usepackage{pgfplots}",
+          "\\pgfplotsset{compat=1.18}",
+          extraLibs,
+          "\\begin{document}",
+          tikzBody,
+          "\\end{document}"
+        ];
+        const finalLatex = latexLines.join("\n");
 
-        setDebugCode(latexCode); // 存起來，萬一報錯可以看看到底送了什麼
-
-        // 4. 改用 JSON 格式發送給 Kroki，這是最不容易出錯的傳輸方式
+        // 4. 以最安全的 JSON 格式發送
         const response = await fetch("https://kroki.io/", {
           method: "POST",
           headers: {
@@ -57,44 +59,44 @@ ${tikzContent}
             "Accept": "image/svg+xml"
           },
           body: JSON.stringify({
-            diagram_source: latexCode,
+            diagram_source: finalLatex,
             diagram_type: "tikz",
             output_format: "svg"
           })
         });
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(errText);
+        const text = await response.text();
+
+        // 攔截 Kroki 回傳的錯誤圖表 (Kroki 即使出錯也會回傳包含錯誤訊息的 SVG)
+        if (!response.ok || text.includes("LaTeX Error")) {
+           throw new Error("LaTeX Compilation Failed");
         }
 
-        const svgText = await response.text();
-        setSvgContent(svgText);
-      } catch (err: any) {
+        setSvgContent(text);
+      } catch (err) {
         console.error("TikZ 渲染失敗:", err);
-        setError(err.message);
+        setError(true);
       }
     }
     fetchImage();
   }, [code]);
 
-  // 💡 如果還是不幸出錯，直接把送到伺服器的原始碼印出來，我們一秒就能抓到蟲！
+  // 如果真的出錯，顯示友善的重試訊息
   if (error) {
     return (
-      <span className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs overflow-auto block">
-        <strong>⚠️ 渲染失敗，請看下方的除錯資訊：</strong>
-        <pre className="mt-2 bg-red-100 p-2 rounded whitespace-pre-wrap">{error}</pre>
-        <hr className="my-2 border-red-200" />
-        <strong>送出的 LaTeX 原始碼 (請檢查反斜線是否都在)：</strong>
-        <pre className="mt-2 bg-white p-2 rounded whitespace-pre-wrap">{debugCode}</pre>
-      </span>
+      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block text-center">
+        <strong>⚠️ 哎呀，AI 老師這張圖畫壞了！</strong>
+        <p className="mt-1 text-xs opacity-80">請在對話框輸入：「這張圖出錯了，請檢查 TikZ 語法並重新畫一次」</p>
+      </div>
     );
   }
 
+  // 讀取中狀態
   if (!svgContent) {
     return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
   }
 
+  // 成功渲染
   return (
     <span
       className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block overflow-hidden"
