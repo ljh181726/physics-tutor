@@ -25,11 +25,11 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
   const [error, setError] = useState<string>("");
   const [debugCode, setDebugCode] = useState<string>("");
 
-  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重複發送相同請求
+  // 🛡️ 記憶鎖：記錄上一次成功請求的 TikZ 代碼，防止重繪閃爍
   const lastFetchedCode = useRef<string>("");
 
   useEffect(() => {
-    // 關鍵防護：如果傳進來的程式碼跟上一次一樣，就絕對不清除狀態、也不重新發送 Kroki 請求
+    // 關鍵防護：如果傳進來的程式碼跟上一次完全一樣，就絕對不清除狀態、也不重複請求 Kroki
     if (code.trim() === lastFetchedCode.current.trim()) return;
 
     async function fetchImage() {
@@ -78,17 +78,17 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
            throw new Error(text);
         }
 
-        // 成功取得圖表，將代碼存入記憶鎖
+        // 成功取得圖表，將代碼存入記憶鎖，未來除非代碼更新否則永不重畫
         lastFetchedCode.current = code;
         setSvgContent(text);
-        setError(""); // 清除先前的錯誤狀態
+        setError(""); 
       } catch (err: any) {
         console.error("TikZ 渲染失敗:", err);
         setError(err.message || "Unknown Error");
       }
     }
     
-    // 如果代碼變了，重置狀態並載入新圖表
+    // 只有代碼真正變更時，才重置狀態並載入新圖表
     setSvgContent("");
     fetchImage();
   }, [code]);
@@ -123,11 +123,10 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
     />
   );
 }, (prevProps, nextProps) => {
-  // 核心阻擋機制：只有當代碼內容真正被改變時，才允許 TikZ 元件重新渲染
+  // 元件層防護：只要代碼純文字 trim 後一樣，就直接跳過 VDOM 重新渲染，圖片不閃爍
   return prevProps.code.trim() === nextProps.code.trim();
 });
 
-// 設定 Memo 的 DisplayName 以利除錯
 TikzImage.displayName = "TikzImage";
 
 export default function ThreadChatRoom() {
@@ -321,7 +320,7 @@ function ChatContent() {
           <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
             <h4 className="text-sm font-bold text-blue-800">幫你的 AI 大腦增加記憶：</h4>
             <input type="text" placeholder="筆記標題 (例如：遇到斜面摩擦力的判斷法)" value={personalNoteTitle} onChange={e => setPersonalNoteTitle(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
-            <textarea placeholder="內容 (example)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
+            <textarea placeholder="內容 (例如：只要題目提到『等速運動』，代表合力為零...)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
             <button onClick={handleSavePersonalNote} className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all">存入我的個人 AI 大腦</button>
           </div>
         )}
@@ -330,12 +329,14 @@ function ChatContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {/* 💡 關鍵優化：對模型回覆框移除全域的 overflow-x-auto，改用正常的區塊排版避免 KaTeX 裁切 */}
+            {/* 💡 核心優化：外層對話框移除全域 overflow-x-auto，避免與內層 KaTeX 的高度計算衝突導致裁切 */}
             <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
-              {/* 💡 關鍵優化：自訂內部 .katex-display 樣式，只有公式區塊能獨立橫向捲動，且留有足夠的上下 padding 讓根號完全舒展 */}
-              <div className="markdown-content [&&_.katex-display]:overflow-x-auto [&&_.katex-display]:overflow-y-hidden [&&_.katex-display]:py-3 [&&_.katex-display]:my-1 [&&_.katex]:whitespace-nowrap">
+              {/* 💡 核心優化：
+                  1. 增加 leading-relaxed 與 space-y-3 擴大行與段落之間的白留空。
+                  2. 針對內部 .katex-display 公式塊實施局部橫向捲動，且使用 overflow-y-visible 搭配 py-4，釋放頂部空間，徹底防止根號壓住上方數字。*/}
+              <div className="markdown-content leading-relaxed space-y-3 [&&_.katex-display]:overflow-x-auto [&&_.katex-display]:overflow-y-visible [&&_.katex-display]:py-4 [&&_.katex-display]:my-2 [&&_.katex]:whitespace-nowrap">
                 <ReactMarkdown
                   remarkPlugins={[remarkMath]}
                   rehypePlugins={[rehypeKatex]} 
