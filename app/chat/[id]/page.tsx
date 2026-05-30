@@ -19,22 +19,22 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 終極修復版：強制擷取繪圖區塊，免疫 AI 的語法幻覺
+// 🚀 終極修復版：放棄不穩定的瀏覽器壓縮，改用絕對穩定的 POST 請求
 const TikzImage = ({ code }: { code: string }) => {
-  const [imgUrl, setImgUrl] = useState<string>("");
+  const [svgContent, setSvgContent] = useState<string>("");
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
-    async function fetchUrl() {
+    async function fetchImage() {
       try {
-        // 💡 核心防禦：用正規表達式 (Regex) 強制抓出 tikzpicture 區塊
-        // 就算 AI 在前後加上了廢話、錯誤的 documentclass，都會被過濾掉
+        // 1. 強制擷取正確的畫圖區塊，免疫 AI 的廢話
         let tikzContent = code;
         const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
         if (match) {
           tikzContent = match[0];
         }
 
-        // 💡 強制由我們來包裝最完美的 LaTeX 結構，絕對不會再有 Missing document 的問題
+        // 2. 補齊最標準的 LaTeX 開頭與結尾，確保支援物理數學的高階公式
         const latexCode = `\\documentclass[tikz,border=2mm]{standalone}
 \\usepackage{amsmath,amssymb}
 \\usepackage{pgfplots}
@@ -43,42 +43,52 @@ const TikzImage = ({ code }: { code: string }) => {
 ${tikzContent}
 \\end{document}`;
 
-        const encoder = new TextEncoder();
-        const data = encoder.encode(latexCode);
-        
-        const CS = (window as any).CompressionStream;
-        if (!CS) {
-          console.error("你的瀏覽器過舊，不支援 CompressionStream");
-          return;
+        // 3. 直接發送 POST 請求給 Kroki，不壓縮、不轉 Base64！
+        const response = await fetch("https://kroki.io/tikz/svg", {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain",
+          },
+          body: latexCode,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText);
         }
 
-        const stream = new Response(data).body?.pipeThrough(new CS('deflate'));
-        if (!stream) return;
-        const compressedBuffer = await new Response(stream).arrayBuffer();
-        
-        const bytes = new Uint8Array(compressedBuffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_');
-        
-        setImgUrl(`https://kroki.io/tikz/svg/${base64}`);
-      } catch (error) {
-        console.error("TikZ 渲染失敗:", error);
+        // 4. 拿到 SVG 純文字後直接存起來
+        const svgText = await response.text();
+        setSvgContent(svgText);
+      } catch (err: any) {
+        console.error("TikZ 渲染失敗:", err);
+        setError(err.message);
       }
     }
-    fetchUrl();
+    fetchImage();
   }, [code]);
 
-  if (!imgUrl) {
+  // 如果伺服器真的報錯，把錯誤顯示出來方便除錯，而不是白畫面
+  if (error) {
+    return (
+      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs overflow-auto block">
+        <strong>圖表渲染失敗：</strong>
+        <pre className="mt-2">{error}</pre>
+      </div>
+    );
+  }
+
+  // 讀取中狀態
+  if (!svgContent) {
     return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
   }
 
+  // 直接將 SVG 嵌入畫面中
   return (
-    <span className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block">
-      <img src={imgUrl} alt="TikZ 物理/數學幾何圖形" className="max-w-full h-auto" />
-    </span>
+    <span
+      className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block overflow-hidden"
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
   );
 };
 
@@ -268,14 +278,13 @@ function ChatContent() {
                   rehypePlugins={[rehypeKatex]} 
                   components={{
                     code({ node, inline, className, children, ...props }: any) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const codeString = String(children).replace(/\n$/, '');
+                        const match = /language-(\w+)/.exec(className || '');
+                        // 關鍵：確保陣列正確合併，不會產生逗號
+                        const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
 
-                      // 🚀 核心：攔截 TikZ 程式碼並用我們寫好的組件渲染
-                      if (!inline && match && match[1] === 'tikz') {
+                        if (!inline && match && match[1] === 'tikz') {
                         return <TikzImage code={codeString} />;
-                      }
-
+                        }
                       // 保留原本對付漏網 SVG 的相容性支援
                       if (!inline && codeString.includes('<svg')) {
                         return (
