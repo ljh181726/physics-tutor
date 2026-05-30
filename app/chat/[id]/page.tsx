@@ -264,15 +264,117 @@ function ChatContent() {
       setMessages(prev => [...prev, { role: "model", content: `❌ 錯誤：${error.message}`, timestamp: Date.now() }]);
     } finally { setIsSending(false); }
   };
-  // 🛡️ 最強字串修復：解決 AI 亂打標籤或不穿衣服的狀況
+
+  // 🛡️ 最強字串修復：解決 AI 亂打標籤（例如將 ```latex 打成 ```tikz）或忘記穿衣服的狀況
   const formatMessageContent = (text: string) => {
     if (!text) return "";
     let fixedText = text;
     
-    // 把 AI 寫錯的 ```latex 等標籤換成我們系統認得的 ```tikz
+    // 1. 把 AI 寫錯的 ```latex 換成我們系統認得的 ```tikz
     fixedText = fixedText.replace(/```latex/g, "```tikz");
+    
+    // 2. 攔截 AI 忘記包裝的裸奔 TikZ 程式碼
+    if (fixedText.includes('\\begin{tikzpicture}') && !fixedText.includes('```tikz')) {
+      fixedText = fixedText.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, (match) => `\n\`\`\`tikz\n${match}\n\`\`\`\n`);
+    }
     
     return fixedText;
   };
 
-} // <-- THIS CLOSING BRACE FOR 'ChatContent' WAS MISSING
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.push(`/chat?subject=${subject}`)} className="hover:opacity-80 text-xl">🏠</button>
+          <h1 className="text-xl font-bold">{subjectInfo.name}</h1>
+        </div>
+        <span className="text-sm opacity-90 font-bold">{user?.displayName} 同學</span>
+      </header>
+
+      <div className="bg-white border-b px-4 py-2">
+        <div className="max-w-4xl mx-auto flex justify-between items-center text-xs">
+          <span className="text-gray-400">💡 當前已加載 {knowledgeBaseText.split('\n\n').filter(t => t).length} 條個人筆記與講義</span>
+          <button onClick={() => setShowNoteForm(!showNoteForm)} className="font-bold text-blue-600 hover:text-blue-800 transition-colors">
+            {showNoteForm ? "✖ 關閉介面" : "📝 點我加入個人筆記/解題口訣"}
+          </button>
+        </div>
+        
+        {showNoteForm && (
+          <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
+            <h4 className="text-sm font-bold text-blue-800">幫你的 AI 大腦增加記憶：</h4>
+            <input type="text" placeholder="筆記標題 (例如：遇到斜面摩擦力的判斷法)" value={personalNoteTitle} onChange={e => setPersonalNoteTitle(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+            <textarea placeholder="內容 (例如：只要題目提到『等速運動』，代表合力為零...)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
+            <button onClick={handleSavePersonalNote} className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all">存入我的個人 AI 大腦</button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none overflow-x-auto"}`}>
+              {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
+              
+              <div className="markdown-content">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]} 
+                  components={{
+                    code({ node, inline, className, children, ...props }: any) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const codeString = Array.isArray(children) ? children.join('') : String(children || '').replace(/\n$/, '');
+
+                        if (!inline && match && match[1] === 'tikz') {
+                           return <TikzImage code={codeString} />;
+                        }
+                      
+                        if (!inline && codeString.includes('<svg')) {
+                          return (
+                            <div className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center" dangerouslySetInnerHTML={{ __html: codeString }} />
+                          );
+                        }
+
+                        return inline ? (
+                          <code className={className} {...props}>{children}</code>
+                        ) : (
+                          <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+                            <code className={className} {...props}>{children}</code>
+                          </pre>
+                        );
+                    },
+                  }}
+                >
+                  {/* 🚀 關鍵改動：在這裡呼叫 formatMessageContent 攔截修復 TikZ 的標籤 */}
+                  {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
+                </ReactMarkdown>
+              </div>
+              {msg.images && msg.images.map((img: string, i: number) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <footer className="p-4 bg-white border-t">
+        <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto space-y-2">
+          {imagesBase64.length > 0 && (
+            <div className="flex gap-2 p-2 bg-gray-50 rounded-xl mb-2">
+              {imagesBase64.map((img, i) => (
+                <div key={i} className="relative w-16 h-16 border rounded-lg overflow-hidden shadow-inner"><img src={img} className="w-full h-full object-cover" alt="upload preview" /></div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <label className="cursor-pointer bg-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors">
+              📷<input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+            </label>
+            <input type="text" value={input} onChange={e => setInput(e.target.value)} className="flex-1 border rounded-full px-5 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="請輸入問題或拍照..." />
+            <button type="submit" disabled={isSending} className={`px-6 py-3 rounded-full font-bold shadow-md transition-all ${isSending ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}>
+              {isSending ? "發送中..." : "發送"}
+            </button>
+          </div>
+        </form>
+      </footer>
+    </div>
+  );
+}
