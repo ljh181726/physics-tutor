@@ -56,8 +56,8 @@ const TikzImage = ({ code }: { code: string }) => {
         const finalLatex = latexLines.join("\n");
         setDebugCode(finalLatex);
 
-        // 5. 改回最穩定的純文字 POST 請求
-        const response = await fetch("[https://kroki.io/tikz/svg](https://kroki.io/tikz/svg)", {
+        // 5. 使用最穩定的純文字 POST 請求
+        const response = await fetch("https://kroki.io/tikz/svg", {
           method: "POST",
           headers: {
             "Content-Type": "text/plain",
@@ -269,8 +269,6 @@ function ChatContent() {
   const formatMessageContent = (text: string) => {
     if (!text) return "";
     let fixedText = text;
-    // 把 AI 寫錯的 ```latex 換成我們系統認得的 ```tikz
+    // 把 AI 寫錯的 ```latex 等標籤換成我們系統認得的 ```tikz
     fixedText = fixedText.replace(/
 http://googleusercontent.com/immersive_entry_chip/0
-
-這次我掛保證：你在上面傳給我的那段帶有彈簧跟方塊的受力分析 TikZ 代碼，換上這個版本後，**絕對能夠完美渲染出精美的圖表**。就算 AI 日常發神經漏掉標籤，前端也會無腦把它救回來！趕緊更新試試！
