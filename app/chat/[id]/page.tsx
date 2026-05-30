@@ -19,37 +19,48 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 終極修復版：放棄不穩定的瀏覽器壓縮，改用絕對穩定的 POST 請求
+// 🚀 終極防呆版：使用 String.raw 免疫反斜線陷阱，並改用穩定的 JSON API
 const TikzImage = ({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [debugCode, setDebugCode] = useState<string>("");
 
   useEffect(() => {
     async function fetchImage() {
       try {
-        // 1. 強制擷取正確的畫圖區塊，免疫 AI 的廢話
+        // 1. 強制過濾 AI 輸出的多餘外殼，只保留核心繪圖區塊
         let tikzContent = code;
         const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
         if (match) {
           tikzContent = match[0];
         }
 
-        // 2. 補齊最標準的 LaTeX 開頭與結尾，確保支援物理數學的高階公式
-        const latexCode = `\\documentclass[tikz,border=2mm]{standalone}
-\\usepackage{amsmath,amssymb}
-\\usepackage{pgfplots}
-\\pgfplotsset{compat=1.18}
-\\begin{document}
-${tikzContent}
-\\end{document}`;
+        // 2. 獨立抓取 AI 可能生成的 \usetikzlibrary (這必須放在 preamble 裡面才不會報錯)
+        const libraryMatch = code.match(/\\usetikzlibrary\{[^}]*\}/g);
+        const extraLibraries = libraryMatch ? libraryMatch.join('\n') : "";
 
-        // 3. 直接發送 POST 請求給 Kroki，不壓縮、不轉 Base64！
-        const response = await fetch("https://kroki.io/tikz/svg", {
+        // 3. 🛡️ 核心修復：使用 String.raw 保證反斜線 \ 絕對不會被 JS 吃掉！
+        const latexCode = String.raw`\documentclass[tikz,border=2mm]{standalone}
+\usepackage{amsmath,amssymb}
+${extraLibraries}
+\begin{document}
+${tikzContent}
+\end{document}`;
+
+        setDebugCode(latexCode); // 存起來，萬一報錯可以看看到底送了什麼
+
+        // 4. 改用 JSON 格式發送給 Kroki，這是最不容易出錯的傳輸方式
+        const response = await fetch("https://kroki.io/", {
           method: "POST",
           headers: {
-            "Content-Type": "text/plain",
+            "Content-Type": "application/json",
+            "Accept": "image/svg+xml"
           },
-          body: latexCode,
+          body: JSON.stringify({
+            diagram_source: latexCode,
+            diagram_type: "tikz",
+            output_format: "svg"
+          })
         });
 
         if (!response.ok) {
@@ -57,7 +68,6 @@ ${tikzContent}
           throw new Error(errText);
         }
 
-        // 4. 拿到 SVG 純文字後直接存起來
         const svgText = await response.text();
         setSvgContent(svgText);
       } catch (err: any) {
@@ -68,22 +78,23 @@ ${tikzContent}
     fetchImage();
   }, [code]);
 
-  // 如果伺服器真的報錯，把錯誤顯示出來方便除錯，而不是白畫面
+  // 💡 如果還是不幸出錯，直接把送到伺服器的原始碼印出來，我們一秒就能抓到蟲！
   if (error) {
     return (
-      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs overflow-auto block">
-        <strong>圖表渲染失敗：</strong>
-        <pre className="mt-2">{error}</pre>
-      </div>
+      <span className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs overflow-auto block">
+        <strong>⚠️ 渲染失敗，請看下方的除錯資訊：</strong>
+        <pre className="mt-2 bg-red-100 p-2 rounded whitespace-pre-wrap">{error}</pre>
+        <hr className="my-2 border-red-200" />
+        <strong>送出的 LaTeX 原始碼 (請檢查反斜線是否都在)：</strong>
+        <pre className="mt-2 bg-white p-2 rounded whitespace-pre-wrap">{debugCode}</pre>
+      </span>
     );
   }
 
-  // 讀取中狀態
   if (!svgContent) {
     return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
   }
 
-  // 直接將 SVG 嵌入畫面中
   return (
     <span
       className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block overflow-hidden"
