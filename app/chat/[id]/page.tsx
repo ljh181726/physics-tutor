@@ -19,21 +19,39 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 新增：Kroki API + TikZ 渲染組件 (完全零依賴，使用瀏覽器原生壓縮 API)
+// 🚀 修復版：自動補全 LaTeX 文件結構與必備數學套件
 const TikzImage = ({ code }: { code: string }) => {
   const [imgUrl, setImgUrl] = useState<string>("");
 
   useEffect(() => {
     async function fetchUrl() {
       try {
+        // 💡 核心修復：自動判斷並補上完整的 LaTeX 獨立文件結構 (Standalone)
+        let latexCode = code.trim();
+        if (!latexCode.includes("\\documentclass")) {
+          latexCode = `\\documentclass[tikz,border=2mm]{standalone}
+\\usepackage{amsmath,amssymb}
+\\usepackage{pgfplots}
+\\pgfplotsset{compat=1.18}
+\\begin{document}
+${latexCode}
+\\end{document}`;
+        }
+
         const encoder = new TextEncoder();
-        const data = encoder.encode(code);
-        // 使用瀏覽器原生的 CompressionStream 進行 deflate 壓縮
-        const stream = new Response(data).body?.pipeThrough(new CompressionStream('deflate'));
+        const data = encoder.encode(latexCode);
+        
+        // 繞過 TypeScript 檢查使用原生的 CompressionStream
+        const CS = (window as any).CompressionStream;
+        if (!CS) {
+          console.error("你的瀏覽器過舊，不支援 CompressionStream");
+          return;
+        }
+
+        const stream = new Response(data).body?.pipeThrough(new CS('deflate'));
         if (!stream) return;
         const compressedBuffer = await new Response(stream).arrayBuffer();
         
-        // 轉為 Base64 (Url Safe)
         const bytes = new Uint8Array(compressedBuffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) {
@@ -50,23 +68,15 @@ const TikzImage = ({ code }: { code: string }) => {
   }, [code]);
 
   if (!imgUrl) {
-    return <div className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse">🎨 老師正在精確繪圖中...</div>;
+    return <span className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse block">🎨 老師正在精確繪圖中...</span>;
   }
 
   return (
-    <div className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm">
+    <span className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm block">
       <img src={imgUrl} alt="TikZ 物理/數學幾何圖形" className="max-w-full h-auto" />
-    </div>
+    </span>
   );
 };
-
-export default function ThreadChatRoom() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
-      <ChatContent />
-    </Suspense>
-  );
-}
 
 function ChatContent() {
   const router = useRouter();
