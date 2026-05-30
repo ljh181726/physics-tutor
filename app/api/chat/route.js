@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 📐 數學公式防錯指令：徹底根除根號排版碎裂問題，改用最穩定的次方表示法！
 const FORMULA_INSTRUCTION = `
 ⚠️【最高等級公式規範 - 嚴禁使用根號】：
 - 在輸出任何含有「平方根」或「根號」的數學、物理、化學公式時，**嚴禁使用 \\sqrt{...} 符號**。
@@ -13,24 +12,33 @@ const FORMULA_INSTRUCTION = `
 `;
 
 // ════════════════════════════════════════
-//   各學科專屬 TikZ 檢索與模仿規範 (杜絕天馬行空)
+//   各學科專屬 TikZ 檢索與模仿規範 (精確構圖與防錯)
 // ════════════════════════════════════════
 
 const TIKZ_BASE_RULES = `
-🚨 致命規則：絕對禁止在 TikZ 程式碼中使用任何中文！(包含 node 標籤)。遇到中文會導致渲染伺服器徹底崩潰！標籤一律使用標準符號或英文。
+🚨【致命規則：絕對禁止在 TikZ 程式碼中使用任何中文！】
+- 包含 node 標籤、註解、任何文字！遇到中文會導致渲染伺服器徹底崩潰！
+- 所有標籤與文字一律使用標準物理量符號（如 F, N, W, g, theta, F_A）或英文單字（如 System, Top, Bottom, Wall）。
 - 凡是帶箭頭的線條，必須統一加上 [>=stealth]。例如：\\draw[->, >=stealth] ...
-- 主要線條一律用 thick，輔助線一律用 thin 或是 dashed（虛線）。
-- 整體 X 與 Y 坐報範圍儘量控制在 -4 到 4 之間，構圖必須緊湊、字體不得與圖形重疊。
+- 主要實體線條與物體外框一律用 thick，受力箭頭用 very thick，輔助線（如中心連線、角度對齊線）一律用 thin, dashed（虛線）。
+- 整體 X 與 Y 座標範圍儘量控制在 -4 到 4 之間，構圖必須緊湊、字體與標籤不得與圖形、線條重疊。
 - 程式碼必須完整包含 \\begin{tikzpicture} 與 \\end{tikzpicture}。
 `;
 
 const PHYSICS_TIKZ = `
-⚠️【物理科 - 權威教科書模仿規範】：
-1. 💡【先查閱再模仿】：在寫下 \\begin{tikzpicture} 後的第一行，必須先寫下一行註解（如：% [Style Copy: Imitating Halliday Physics - Free Body Diagram]），說明你正精確模仿哪種經典物理圖表。
-2. 視覺標準：模仿經典大一普物 Halliday 講義風格。
-   - 【環境基底】地平面、斜面、牆壁一律用 gray 或 gray!40，並加上斜線陰影面。
-   - 【核心物體】木塊、圓球、透鏡一律用 thick, blue!70!black。
-   - 【受力與向量】力(F)、速度(v)、加速度(a) 向量箭頭一律用 thick, ->, >=stealth, red!70!black。力的起點必須精確對齊物體質心或接觸點！
+⚠️【物理科 - 權威教科書多面板 FBD 構圖規範】：
+1. 💡【先查閱再模仿】：在寫下 \\begin{tikzpicture} 後的第一行，必須先寫下一行註解（如：% [Style Copy: Imitating Halliday Physics - Multi-Panel Free Body Diagram]），說明你正精確模仿哪種經典物理圖表。
+2. 視覺標準：完美模仿 Halliday Physics 講義風格。
+   - 【環境基底】地平面、斜面、凹型牆壁一律用 gray 或 gray!40，並加上斜線陰影面（pattern=north east lines）。
+   - 【核心物體】木塊、圓球、多個接觸圓柱體一律用 thick, blue!70!black 描邊，內部可用輕微漸層或留白，使其具體立體感。
+   - 【受力與向量】力(F, N, T)、速度(v)、加速度(a) 向量箭頭一律用 very thick, ->, >=stealth, red!70!black。
+3. 🚨【硬性受力圖架構 - 嚴禁偷工減料】：
+   - 如果題目涉及多個物體或複雜幾何（如多圓柱堆疊、多晶格、滑輪系統），**禁止只畫一張大雜燴圖**。
+   - 強制使用「多面板/拆解圖（Multi-panel / Exploded View）」構圖！利用座標偏移（[xshift=...]），在同一張 TikZ 中從左到右、或從上到下並排繪製：
+     * 面板 A：【Geometric Analysis】純幾何與角度關係圖（標註 theta, R, 關鍵核心三角形、圓心連線虛線）。
+     * 面板 B：【FBD of Entire System】將多物體視為一體的整體受力圖（只畫外力與總重力）。
+     * 面板 C：【Isolated FBDs】各個獨立物體的隔離受力圖（如：上圓柱受力、左下圓柱受力）。
+   - 力的起點（或終點）必須**極度精確**地面對齊物體的質心（如重力 W）或接觸點的法線方向（如支持力 N），角度必須與幾何分析完全對應！
 ` + TIKZ_BASE_RULES;
 
 const MATH_TIKZ = `
@@ -71,7 +79,7 @@ const SYSTEM_INSTRUCTIONS = {
   physics: `你是一位專業且極具耐心的專業高中物理老師。
 1. 解題架構：請依序提供「核心物理觀念」、「條列式已知條件」與「詳細步驟解題」。
 2. LaTeX 渲染防錯：行內公式使用 $...$，獨立公式必須使用 $$...$$（上下強制空一行）。
-3. TikZ 繪圖：解答涉及受力分析、光路圖時，必須繪製幾何精確的圖形。` + PHYSICS_TIKZ + FORMULA_INSTRUCTION,
+3. TikZ 繪圖：解答涉及力學受力分析、運動學、光路圖時，**強制繪製多面板、隔離體拆解、幾何極度精確**的 TikZ 圖形。必須嚴格遵循下方的物理繪圖規範與嚴禁中文、嚴禁根號之要求。` + PHYSICS_TIKZ + FORMULA_INSTRUCTION,
 
   math: `你是一位擅長將抽象概念具體化的專業高中數學老師。
 1. 解題架構：請依序提供「所用定理或公式定義」、「幾何或代數思維拆解」與「分步推導過程」。
@@ -94,8 +102,6 @@ const SYSTEM_INSTRUCTIONS = {
 2. 表格整理：比較觀念時，強制使用 Markdown 表格。
 3. TikZ 繪圖：涉及到天球座標、板塊邊界系統時，必須繪製精確的圖形。` + EARTH_TIKZ + FORMULA_INSTRUCTION
 };
-
-
 export async function POST(req) {
   try {
     const { imagesBase64, prompt, subject, history, threadId, userName, knowledge } = await req.json();
