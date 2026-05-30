@@ -19,29 +19,33 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 修復版：自動補全 LaTeX 文件結構與必備數學套件
+// 🚀 終極修復版：強制擷取繪圖區塊，免疫 AI 的語法幻覺
 const TikzImage = ({ code }: { code: string }) => {
   const [imgUrl, setImgUrl] = useState<string>("");
 
   useEffect(() => {
     async function fetchUrl() {
       try {
-        // 💡 核心修復：自動判斷並補上完整的 LaTeX 獨立文件結構 (Standalone)
-        let latexCode = code.trim();
-        if (!latexCode.includes("\\documentclass")) {
-          latexCode = `\\documentclass[tikz,border=2mm]{standalone}
+        // 💡 核心防禦：用正規表達式 (Regex) 強制抓出 tikzpicture 區塊
+        // 就算 AI 在前後加上了廢話、錯誤的 documentclass，都會被過濾掉
+        let tikzContent = code;
+        const match = code.match(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/);
+        if (match) {
+          tikzContent = match[0];
+        }
+
+        // 💡 強制由我們來包裝最完美的 LaTeX 結構，絕對不會再有 Missing document 的問題
+        const latexCode = `\\documentclass[tikz,border=2mm]{standalone}
 \\usepackage{amsmath,amssymb}
 \\usepackage{pgfplots}
 \\pgfplotsset{compat=1.18}
 \\begin{document}
-${latexCode}
+${tikzContent}
 \\end{document}`;
-        }
 
         const encoder = new TextEncoder();
         const data = encoder.encode(latexCode);
         
-        // 繞過 TypeScript 檢查使用原生的 CompressionStream
         const CS = (window as any).CompressionStream;
         if (!CS) {
           console.error("你的瀏覽器過舊，不支援 CompressionStream");
