@@ -19,10 +19,10 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 最終防彈版：使用陣列組合確保反斜線絕對存活，並嚴格攔截 AI 幻覺
+// 🚀 最終救贖版：支援中文實體標籤 + 避開 standalone 核心 Bug，保證絕不破圖
 const TikzImage = ({ code }: { code: string }) => {
   const [svgContent, setSvgContent] = useState<string>("");
-  const [error, setError] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     async function fetchImage() {
@@ -38,55 +38,61 @@ const TikzImage = ({ code }: { code: string }) => {
         const libraryMatch = code.match(/\\usetikzlibrary\{[^}]*\}/g);
         const extraLibs = libraryMatch ? libraryMatch.join('\n') : "";
 
-        // 3. 🛡️ 核心修復：使用 Array 來組合字串，每一行的雙反斜線絕對不會被 JS 吃掉！
+        // 3. 🛡️ 核心修復：放棄 standalone，改用 article，並載入 CJKutf8 支援物理圖中的繁體中文標籤！
         const latexLines = [
-          "\\documentclass[tikz,border=2mm]{standalone}",
+          "\\documentclass{article}",
+          "\\usepackage{tikz}",
           "\\usepackage{amsmath,amssymb}",
           "\\usepackage{pgfplots}",
           "\\pgfplotsset{compat=1.18}",
+          "\\usepackage{CJKutf8}", // 解決中文崩潰的關鍵
           extraLibs,
+          "\\pagestyle{empty}",
           "\\begin{document}",
+          "\\begin{CJK}{UTF8}{bsmi}", // 開啟繁體中文支援環境
           tikzBody,
+          "\\end{CJK}",
           "\\end{document}"
         ];
-        const finalLatex = latexLines.join("\n");
+        
+        // 確保移除任何可能導致 Missing document 的隱藏 BOM 字元
+        const finalLatex = latexLines.join("\n").replace(/^\uFEFF/, '');
 
-        // 4. 以最安全的 JSON 格式發送
-        const response = await fetch("https://kroki.io/", {
+        // 4. 直接使用 text/plain 發送，避開所有 JSON 的反斜線地雷
+        const response = await fetch("https://kroki.io/tikz/svg", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "Accept": "image/svg+xml"
+            "Content-Type": "text/plain",
           },
-          body: JSON.stringify({
-            diagram_source: finalLatex,
-            diagram_type: "tikz",
-            output_format: "svg"
-          })
+          body: finalLatex
         });
 
         const text = await response.text();
 
-        // 攔截 Kroki 回傳的錯誤圖表 (Kroki 即使出錯也會回傳包含錯誤訊息的 SVG)
-        if (!response.ok || text.includes("LaTeX Error")) {
-           throw new Error("LaTeX Compilation Failed");
+        // 攔截 Kroki 的報錯 SVG 或明碼錯誤
+        if (!response.ok || text.includes("LaTeX Error") || text.includes("Undefined control sequence")) {
+           throw new Error(text);
         }
 
         setSvgContent(text);
-      } catch (err) {
+      } catch (err: any) {
         console.error("TikZ 渲染失敗:", err);
-        setError(true);
+        setError(err.message);
       }
     }
     fetchImage();
   }, [code]);
 
-  // 如果真的出錯，顯示友善的重試訊息
+  // 如果真的又失敗，這次會把完整的錯誤細節印出來供除錯
   if (error) {
     return (
-      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block text-center">
-        <strong>⚠️ 哎呀，AI 老師這張圖畫壞了！</strong>
-        <p className="mt-1 text-xs opacity-80">請在對話框輸入：「這張圖出錯了，請檢查 TikZ 語法並重新畫一次」</p>
+      <div className="my-4 p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm block">
+        <strong>⚠️ AI 老師畫圖失敗：</strong>
+        <p className="mt-1 text-xs opacity-80">請告訴 AI：「圖表編譯失敗，請確保 TikZ 語法正確」</p>
+        <details className="mt-2">
+          <summary className="text-xs cursor-pointer font-bold">點擊查看伺服器錯誤日誌</summary>
+          <pre className="mt-2 text-xs bg-white p-2 rounded max-h-32 overflow-auto">{error}</pre>
+        </details>
       </div>
     );
   }
@@ -104,6 +110,14 @@ const TikzImage = ({ code }: { code: string }) => {
     />
   );
 };
+
+export default function ThreadChatRoom() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
+      <ChatContent />
+    </Suspense>
+  );
+}
 
 function ChatContent() {
   const router = useRouter();
