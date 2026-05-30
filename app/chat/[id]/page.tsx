@@ -360,37 +360,26 @@ function ChatContent() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f8fafc" }}>
 
-      {/* ── KATEX & TAILWIND FIXES ──────────────────────── */}
+      {/* ── KATEX & TAILWIND CLEAN FIX ────────────────── */}
       <style>{`
-        /* 1. 核心修正：只恢復行內顯示，絕不覆蓋 KaTeX 精確計算的寬高 */
+        /* 1. 只保留這個：防止 Tailwind Preflight 破壞 KaTeX 的行內 SVG */
         .markdown-content .katex svg {
           display: inline !important;
         }
 
-        /* 2. 防止置中大公式左右被切掉，但允許上下溢出（確保根號頂部橫線正常） */
+        /* 2. 允許大公式左右滾動，避免手機版爆版 */
         .markdown-content .katex-display {
           overflow-x: auto !important;
-          overflow-y: visible !important;
           margin: 1em 0 !important;
         }
-        .markdown-content .katex-display > .katex > .katex-html {
-          overflow-y: visible !important;
-          padding-top: 0.5em !important;
-          padding-bottom: 0.3em !important;
-        }
 
-        /* 3. 優化行內公式（如文章中的根號）的排版與垂直對齊 */
-        .markdown-content p .katex > .katex-html {
-          display: inline-block !important;
-          padding-top: 0.2em !important;
-          vertical-align: middle !important;
-        }
+        /* 3. 基礎行高優化，確保上下公式有舒服的呼吸空間 */
         .markdown-content p {
-          line-height: 2.2 !important; /* 給予足夠的行高，根號才不會跟上一行擠在一起 */
+          line-height: 2.0 !important;
           margin-bottom: 0.6em !important;
         }
 
-        /* 4. 其他功能性樣式 */
+        /* 4. 錯題本儲存按鈕 */
         .save-btn { opacity: 0 !important; }
         .save-btn:hover, *:hover > .save-btn { opacity: 1 !important; }
       `}</style>
