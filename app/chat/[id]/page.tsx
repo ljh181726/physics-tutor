@@ -19,6 +19,47 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
+// 🚀 新增：Kroki API + TikZ 渲染組件 (完全零依賴，使用瀏覽器原生壓縮 API)
+const TikzImage = ({ code }: { code: string }) => {
+  const [imgUrl, setImgUrl] = useState<string>("");
+
+  useEffect(() => {
+    async function fetchUrl() {
+      try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(code);
+        // 使用瀏覽器原生的 CompressionStream 進行 deflate 壓縮
+        const stream = new Response(data).body?.pipeThrough(new CompressionStream('deflate'));
+        if (!stream) return;
+        const compressedBuffer = await new Response(stream).arrayBuffer();
+        
+        // 轉為 Base64 (Url Safe)
+        const bytes = new Uint8Array(compressedBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_');
+        
+        setImgUrl(`https://kroki.io/tikz/svg/${base64}`);
+      } catch (error) {
+        console.error("TikZ 渲染失敗:", error);
+      }
+    }
+    fetchUrl();
+  }, [code]);
+
+  if (!imgUrl) {
+    return <div className="my-4 p-6 bg-gray-100 rounded-xl text-center text-gray-500 animate-pulse">🎨 老師正在精確繪圖中...</div>;
+  }
+
+  return (
+    <div className="my-4 flex justify-center bg-white p-4 rounded-xl border shadow-sm">
+      <img src={imgUrl} alt="TikZ 物理/數學幾何圖形" className="max-w-full h-auto" />
+    </div>
+  );
+};
+
 export default function ThreadChatRoom() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
@@ -33,35 +74,30 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const threadId = params.id as string;
 
-  // 🛡️ 路由參數防禦
   const rawSubject = searchParams.get("subject") || "physics";
-  const subject = SUBJECT_MAP[rawSubject] ? rawSubject : "physics";
-  const subjectInfo = SUBJECT_MAP[subject];
+  const subject = SUBJECT_MAP[rawSubject as keyof typeof SUBJECT_MAP] ? rawSubject : "physics";
+  const subjectInfo = SUBJECT_MAP[subject as keyof typeof SUBJECT_MAP];
 
-  // 狀態管理
-  const [user, setUser] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [user, setUser] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [imagesBase64, setImagesBase64] = useState([]);
+  const [imagesBase64, setImagesBase64] = useState<string[]>([]);
   const [knowledgeBaseText, setKnowledgeBaseText] = useState("");
   
-  // 🚀 學生個人筆記輸入狀態
   const [personalNoteTitle, setPersonalNoteTitle] = useState("");
   const [personalNoteContent, setPersonalNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
 
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // 初始化：監聽登入狀態、讀取對話與個人知識庫
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) return router.push("/");
       setUser(currentUser);
 
-      // 1. 讀取歷史訊息
       try {
         const q = query(
           collection(db, "chats"),
@@ -70,9 +106,8 @@ function ChatContent() {
         );
         const querySnapshot = await getDocs(q);
         setMessages(querySnapshot.docs.map(doc => doc.data()));
-      } catch (err) { console.error("讀取失敗：", err.message); }
+      } catch (err: any) { console.error("讀取失敗：", err.message); }
 
-      // 2. 🚀 核心：抓取該學生「個人專屬」的講義庫
       try {
         const kbQuery = query(collection(db, `users/${currentUser.uid}/knowledge_base`), where("subject", "==", subject));
         const kbSnapshot = await getDocs(kbQuery);
@@ -84,30 +119,22 @@ function ChatContent() {
     return () => unsubscribe();
   }, [threadId, router, subject]);
 
-  // 📝 儲存個人筆記功能
   const handleSavePersonalNote = async () => {
     if (!personalNoteTitle.trim() || !personalNoteContent.trim() || !user) return;
     try {
       await addDoc(collection(db, `users/${user.uid}/knowledge_base`), {
-        subject: subject,
-        title: personalNoteTitle,
-        content: personalNoteContent,
-        timestamp: Date.now()
+        subject: subject, title: personalNoteTitle, content: personalNoteContent, timestamp: Date.now()
       });
-      alert("✅ 已加入你的個人 AI 資料庫！AI 之後會參考這份筆記教你。");
-      setPersonalNoteTitle("");
-      setPersonalNoteContent("");
-      setShowNoteForm(false);
+      alert("✅ 已加入你的個人 AI 資料庫！");
+      setPersonalNoteTitle(""); setPersonalNoteContent(""); setShowNoteForm(false);
       
-      // 立即更新本地知識庫，讓下次發問馬上生效
       const kbQuery = query(collection(db, `users/${user.uid}/knowledge_base`), where("subject", "==", subject));
       const kbSnapshot = await getDocs(kbQuery);
       setKnowledgeBaseText(kbSnapshot.docs.map(doc => `[${doc.data().title}]\n${doc.data().content}`).join("\n\n"));
-    } catch (err) { alert("儲存失敗：" + err.message); }
+    } catch (err: any) { alert("儲存失敗：" + err.message); }
   };
 
-  // ⭐ 儲存錯題本
-  const saveToNotebook = async (msg, index) => {
+  const saveToNotebook = async (msg: any, index: number) => {
     if (!user) return;
     const prev = messages[index - 1];
     try {
@@ -123,11 +150,10 @@ function ChatContent() {
     } catch (err) { alert("❌ 儲存失敗"); }
   };
 
-  // 📷 圖片壓縮處理
-  const handleImageChange = async (e) => {
-    const files = Array.from(e.target.files);
+  const handleImageChange = async (e: any) => {
+    const files = Array.from(e.target.files) as File[];
     const promises = files.map((file) => {
-      return new Promise((resolve) => {
+      return new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onload = (event) => {
           const img = new Image();
@@ -139,10 +165,10 @@ function ChatContent() {
             else { if (h > MAX) { w *= MAX / h; h = MAX; } }
             canvas.width = w; canvas.height = h;
             const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0, w, h);
+            ctx?.drawImage(img, 0, 0, w, h);
             resolve(canvas.toDataURL("image/jpeg", 0.7));
           };
-          img.src = event.target.result as string;
+          img.src = event.target?.result as string;
         };
         reader.readAsDataURL(file);
       });
@@ -151,8 +177,7 @@ function ChatContent() {
     setImagesBase64(results);
   };
 
-  // ✉️ 發送訊息
-  const handleSendMessage = async (e) => {
+  const handleSendMessage = async (e: any) => {
     e.preventDefault();
     if (!input.trim() && imagesBase64.length === 0) return;
     if (isSending) return;
@@ -161,14 +186,8 @@ function ChatContent() {
     const currentImages = [...imagesBase64];
 
     const userMessage = { 
-      uid: user.uid, 
-      userName: user.displayName || "匿名同學", 
-      subject, 
-      role: "user", 
-      content: userPrompt, 
-      images: currentImages, 
-      timestamp: Date.now(), 
-      threadId 
+      uid: user.uid, userName: user.displayName || "匿名同學", subject, role: "user", 
+      content: userPrompt, images: currentImages, timestamp: Date.now(), threadId 
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -177,16 +196,10 @@ function ChatContent() {
     try {
       await addDoc(collection(db, "chats"), userMessage);
       const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          prompt: userPrompt, 
-          imagesBase64: currentImages, 
-          subject, 
-          history: messages, 
-          threadId,
-          userName: user?.displayName,
-          knowledge: knowledgeBaseText 
+          prompt: userPrompt, imagesBase64: currentImages, subject, 
+          history: messages, threadId, userName: user?.displayName, knowledge: knowledgeBaseText 
         })
       });
       const data = await response.json();
@@ -195,7 +208,7 @@ function ChatContent() {
         setMessages(prev => [...prev, aiMessage]);
         await addDoc(collection(db, "chats"), aiMessage);
       }
-    } catch (error) {
+    } catch (error: any) {
       setMessages(prev => [...prev, { role: "model", content: `❌ 錯誤：${error.message}`, timestamp: Date.now() }]);
     } finally { setIsSending(false); }
   };
@@ -214,36 +227,17 @@ function ChatContent() {
       <div className="bg-white border-b px-4 py-2">
         <div className="max-w-4xl mx-auto flex justify-between items-center text-xs">
           <span className="text-gray-400">💡 當前已加載 {knowledgeBaseText.split('\n\n').filter(t => t).length} 條個人筆記與講義</span>
-          <button 
-            onClick={() => setShowNoteForm(!showNoteForm)}
-            className="font-bold text-blue-600 hover:text-blue-800 transition-colors"
-          >
+          <button onClick={() => setShowNoteForm(!showNoteForm)} className="font-bold text-blue-600 hover:text-blue-800 transition-colors">
             {showNoteForm ? "✖ 關閉介面" : "📝 點我加入個人筆記/解題口訣"}
           </button>
         </div>
         
         {showNoteForm && (
-          <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3 animate-in fade-in slide-in-from-top-2">
+          <div className="max-w-4xl mx-auto mt-3 p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-3">
             <h4 className="text-sm font-bold text-blue-800">幫你的 AI 大腦增加記憶：</h4>
-            <input 
-              type="text" 
-              placeholder="筆記標題 (例如：遇到斜面摩擦力的判斷法)" 
-              value={personalNoteTitle}
-              onChange={e => setPersonalNoteTitle(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-            />
-            <textarea 
-              placeholder="內容 (例如：只要題目提到『等速運動』，代表合力為零...)" 
-              value={personalNoteContent}
-              onChange={e => setPersonalNoteContent(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none"
-            />
-            <button 
-              onClick={handleSavePersonalNote}
-              className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all"
-            >
-              存入我的個人 AI 大腦
-            </button>
+            <input type="text" placeholder="筆記標題 (例如：遇到斜面摩擦力的判斷法)" value={personalNoteTitle} onChange={e => setPersonalNoteTitle(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-400 outline-none" />
+            <textarea placeholder="內容 (例如：只要題目提到『等速運動』，代表合力為零...)" value={personalNoteContent} onChange={e => setPersonalNoteContent(e.target.value)} className="w-full p-2.5 border rounded-xl text-sm h-24 focus:ring-2 focus:ring-blue-400 outline-none" />
+            <button onClick={handleSavePersonalNote} className="w-full bg-blue-600 text-white py-2 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all">存入我的個人 AI 大腦</button>
           </div>
         )}
       </div>
@@ -251,46 +245,44 @@ function ChatContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
+            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none overflow-x-auto"}`}>
               {msg.role === "model" && <button onClick={() => saveToNotebook(msg, idx)} className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90">⭐</button>}
               
               <div className="markdown-content">
                 <ReactMarkdown
-  remarkPlugins={[remarkMath]}
-  rehypePlugins={[rehypeKatex]} 
-  components={{
-    code({ node, inline, className, children, ...props }) {
-      const codeString = String(children).replace(/\n$/, '');
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]} 
+                  components={{
+                    code({ node, inline, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      const codeString = String(children).replace(/\n$/, '');
 
-      // 🚀 關鍵修改：拿掉 xml/html 限制！只要是區塊且包含 <svg>，就直接渲染！
-      if (!inline && codeString.includes('<svg')) {
-        return (
-          <div 
-            className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center"
-            dangerouslySetInnerHTML={{ __html: codeString }} 
-          />
-        );
-      }
+                      // 🚀 核心：攔截 TikZ 程式碼並用我們寫好的組件渲染
+                      if (!inline && match && match[1] === 'tikz') {
+                        return <TikzImage code={codeString} />;
+                      }
 
-      // 其他普通程式碼（如 python, js）維持原樣（深色框）
-      return inline ? (
-        <code className={className} {...props}>
-          {children}
-        </code>
-      ) : (
-        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
-          <code className={className} {...props}>
-            {children}
-          </code>
-        </pre>
-      );
-    },
-  }}
->
-  {msg.content || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
-</ReactMarkdown>
+                      // 保留原本對付漏網 SVG 的相容性支援
+                      if (!inline && codeString.includes('<svg')) {
+                        return (
+                          <div className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center" dangerouslySetInnerHTML={{ __html: codeString }} />
+                        );
+                      }
+
+                      return inline ? (
+                        <code className={className} {...props}>{children}</code>
+                      ) : (
+                        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+                          <code className={className} {...props}>{children}</code>
+                        </pre>
+                      );
+                    },
+                  }}
+                >
+                  {msg.content || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
+                </ReactMarkdown>
               </div>
-              {msg.images && msg.images.map((img, i) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
+              {msg.images && msg.images.map((img: string, i: number) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
             </div>
           </div>
         ))}
@@ -310,18 +302,8 @@ function ChatContent() {
             <label className="cursor-pointer bg-gray-100 p-3 rounded-full hover:bg-gray-200 transition-colors">
               📷<input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
             </label>
-            <input 
-              type="text" 
-              value={input} 
-              onChange={e => setInput(e.target.value)} 
-              className="flex-1 border rounded-full px-5 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
-              placeholder="請輸入問題或拍照..." 
-            />
-            <button 
-              type="submit" 
-              disabled={isSending}
-              className={`px-6 py-3 rounded-full font-bold shadow-md transition-all ${isSending ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}
-            >
+            <input type="text" value={input} onChange={e => setInput(e.target.value)} className="flex-1 border rounded-full px-5 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="請輸入問題或拍照..." />
+            <button type="submit" disabled={isSending} className={`px-6 py-3 rounded-full font-bold shadow-md transition-all ${isSending ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-95'}`}>
               {isSending ? "發送中..." : "發送"}
             </button>
           </div>
