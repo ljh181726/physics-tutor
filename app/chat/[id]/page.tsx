@@ -241,6 +241,16 @@ function ChatContent() {
     } finally { setIsSending(false); }
   };
 
+  // 🛡️ 防呆機制：攔截 AI 忘記包裝的裸奔 TikZ 程式碼
+  const formatMessageContent = (text: string) => {
+    if (!text) return "";
+    // 如果發現 TikZ 標籤，但 AI 忘記加 Markdown codeblock (```tikz)
+    if (text.includes('\\begin{tikzpicture}') && !text.includes('```tikz')) {
+      return text.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, (match) => `\n\`\`\`tikz\n${match}\n\`\`\`\n`);
+    }
+    return text;
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <header className={`${subjectInfo.color} text-white px-6 py-4 shadow-md flex justify-between items-center`}>
@@ -304,7 +314,8 @@ function ChatContent() {
                     },
                   }}
                 >
-                  {msg.content || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
+                  {/* 🚀 關鍵改動：在這裡呼叫 formatMessageContent 攔截裸奔的 TikZ */}
+                  {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")} 
                 </ReactMarkdown>
               </div>
               {msg.images && msg.images.map((img: string, i: number) => <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />)}
