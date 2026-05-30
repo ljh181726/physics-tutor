@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense, useMemo } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { auth, db } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -19,20 +19,27 @@ const SUBJECT_MAP = {
   earth: { name: "🌍 高中地科", color: "bg-amber-600" },
 };
 
-// 🚀 TikZ renderer — React.memo prevents re-render when code hasn't changed
+// Global SVG cache: tikz code -> svg string
+// Lives outside all components so it NEVER resets on re-render
+const tikzSvgCache: Record<string, string> = {};
+
 const TikzImage = React.memo(({ code }: { code: string }) => {
-  const [svgContent, setSvgContent] = useState<string>("");
+  const cacheKey = code.trim();
+  const [svgContent, setSvgContent] = useState<string>(tikzSvgCache[cacheKey] || "");
   const [error, setError] = useState<string>("");
   const [debugCode, setDebugCode] = useState<string>("");
-
-  // 🛡️ Memory lock: track last successfully fetched TikZ code
-  const lastFetchedCode = useRef<string>("");
+  const isFetching = useRef(false);
 
   useEffect(() => {
-    const trimmed = code.trim();
+    // Already cached globally — never fetch again
+    if (tikzSvgCache[cacheKey]) {
+      setSvgContent(tikzSvgCache[cacheKey]);
+      return;
+    }
+    // Already fetching — don't double-fetch
+    if (isFetching.current) return;
 
-    // 🛡️ If we already have SVG for this exact code, skip entirely
-    if (svgContent && trimmed === lastFetchedCode.current.trim()) return;
+    isFetching.current = true;
 
     async function fetchImage() {
       try {
@@ -44,7 +51,7 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
         const extraLibs = libraryMatch ? libraryMatch.join('\n') : "";
         tikzBody = tikzBody.replace(/[\u4e00-\u9fa5]/g, '');
 
-        const latexLines = [
+        const finalLatex = [
           "\\documentclass[tikz,border=2mm]{standalone}",
           "\\usepackage{amsmath,amssymb}",
           "\\usepackage{pgfplots}",
@@ -53,8 +60,8 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
           "\\begin{document}",
           tikzBody,
           "\\end{document}"
-        ];
-        const finalLatex = latexLines.join("\n");
+        ].join("\n");
+
         setDebugCode(finalLatex);
 
         const response = await fetch("https://kroki.io/tikz/svg", {
@@ -68,17 +75,20 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
           throw new Error(text);
         }
 
-        lastFetchedCode.current = code;
+        // Store in global cache so no future component instance ever fetches this again
+        tikzSvgCache[cacheKey] = text;
         setSvgContent(text);
         setError("");
       } catch (err: any) {
         console.error("TikZ 渲染失敗:", err);
         setError(err.message || "Unknown Error");
+      } finally {
+        isFetching.current = false;
       }
     }
 
     fetchImage();
-  }, [code]);
+  }, [cacheKey]);
 
   if (error) {
     return (
@@ -114,6 +124,83 @@ const TikzImage = React.memo(({ code }: { code: string }) => {
 
 TikzImage.displayName = "TikzImage";
 
+// Memoized message renderer — only re-renders when msg.content changes, NOT when user types
+const MessageBubble = React.memo(({ msg, idx, onSaveToNotebook }: {
+  msg: any;
+  idx: number;
+  onSaveToNotebook: (msg: any, idx: number) => void;
+}) => {
+  const formatMessageContent = (text: string) => {
+    if (!text) return "";
+    let fixedText = text.replace(/```latex/g, "```tikz");
+    if (fixedText.includes('\\begin{tikzpicture}') && !fixedText.includes('```tikz')) {
+      fixedText = fixedText.replace(
+        /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g,
+        (match) => `\n\`\`\`tikz\n${match}\n\`\`\`\n`
+      );
+    }
+    return fixedText;
+  };
+
+  return (
+    <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
+        {msg.role === "model" && (
+          <button
+            onClick={() => onSaveToNotebook(msg, idx)}
+            className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90"
+          >⭐</button>
+        )}
+
+        <div className="markdown-content leading-loose space-y-5 text-gray-800 break-words">
+          <ReactMarkdown
+            remarkPlugins={[remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            components={{
+              code({ node, inline, className, children, ...props }: any) {
+                const match = /language-(\w+)/.exec(className || '');
+                const codeString = Array.isArray(children)
+                  ? children.join('')
+                  : String(children || '').replace(/\n$/, '');
+
+                if (!inline && match && match[1] === 'tikz') {
+                  return <TikzImage code={codeString} />;
+                }
+
+                if (!inline && codeString.includes('<svg')) {
+                  return (
+                    <div
+                      className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center"
+                      dangerouslySetInnerHTML={{ __html: codeString }}
+                    />
+                  );
+                }
+
+                return inline ? (
+                  <code className={className} {...props}>{children}</code>
+                ) : (
+                  <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
+                    <code className={className} {...props}>{children}</code>
+                  </pre>
+                );
+              },
+            }}
+          >
+            {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")}
+          </ReactMarkdown>
+        </div>
+
+        {msg.images && msg.images.map((img: string, i: number) => (
+          <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />
+        ))}
+      </div>
+    </div>
+  );
+// Only re-render if the message content itself changes — typing in input will NOT trigger this
+}, (prev, next) => prev.msg.content === next.msg.content && prev.msg.images === next.msg.images && prev.idx === next.idx);
+
+MessageBubble.displayName = "MessageBubble";
+
 export default function ThreadChatRoom() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">進入教室中...</div>}>
@@ -147,6 +234,9 @@ function ChatContent() {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
+  // Stable callback ref — never changes identity, so MessageBubble memo is never broken by it
+  const saveToNotebookRef = useRef<(msg: any, idx: number) => void>(() => {});
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) return router.push("/");
@@ -176,7 +266,7 @@ function ChatContent() {
     if (!personalNoteTitle.trim() || !personalNoteContent.trim() || !user) return;
     try {
       await addDoc(collection(db, `users/${user.uid}/knowledge_base`), {
-        subject: subject, title: personalNoteTitle, content: personalNoteContent, timestamp: Date.now()
+        subject, title: personalNoteTitle, content: personalNoteContent, timestamp: Date.now()
       });
       alert("✅ 已加入你的個人 AI 資料庫！");
       setPersonalNoteTitle(""); setPersonalNoteContent(""); setShowNoteForm(false);
@@ -187,6 +277,7 @@ function ChatContent() {
     } catch (err: any) { alert("儲存失敗：" + err.message); }
   };
 
+  // Keep the save callback up to date without changing its identity
   const saveToNotebook = async (msg: any, index: number) => {
     if (!user) return;
     const prev = messages[index - 1];
@@ -202,6 +293,10 @@ function ChatContent() {
       alert("✅ 已加入錯題本");
     } catch (err) { alert("❌ 儲存失敗"); }
   };
+  saveToNotebookRef.current = saveToNotebook;
+
+  // Stable callback wrapper — identity never changes, so memo comparisons pass
+  const stableSaveToNotebook = useMemo(() => (msg: any, idx: number) => saveToNotebookRef.current(msg, idx), []);
 
   const handleImageChange = async (e: any) => {
     const files = Array.from(e.target.files) as File[];
@@ -266,16 +361,6 @@ function ChatContent() {
     } finally { setIsSending(false); }
   };
 
-  const formatMessageContent = (text: string) => {
-    if (!text) return "";
-    let fixedText = text;
-    fixedText = fixedText.replace(/```latex/g, "```tikz");
-    if (fixedText.includes('\\begin{tikzpicture}') && !fixedText.includes('```tikz')) {
-      fixedText = fixedText.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, (match) => `\n\`\`\`tikz\n${match}\n\`\`\`\n`);
-    }
-    return fixedText;
-  };
-
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <style jsx global>{`
@@ -293,7 +378,7 @@ function ChatContent() {
           line-height: 2.2 !important;
           overflow-y: visible !important;
         }
-        /* Fix: allow sqrt vinculum and radical arm to breathe without clipping numbers */
+        /* Fix: sqrt vinculum no longer clips numbers */
         .markdown-content .katex .sqrt > .root {
           margin-top: 0 !important;
         }
@@ -343,61 +428,12 @@ function ChatContent() {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-3xl rounded-3xl p-4 relative group shadow-sm ${msg.role === "user" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 border rounded-tl-none"}`}>
-              {msg.role === "model" && (
-                <button
-                  onClick={() => saveToNotebook(msg, idx)}
-                  className="absolute -top-3 -right-3 bg-yellow-400 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90"
-                >⭐</button>
-              )}
-
-              <div className="markdown-content leading-loose space-y-5 text-gray-800 break-words">
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                  components={{
-                    code({ node, inline, className, children, ...props }: any) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const codeString = Array.isArray(children)
-                        ? children.join('')
-                        : String(children || '').replace(/\n$/, '');
-
-                      if (!inline && match && match[1] === 'tikz') {
-                        // Stable key derived from content prevents unmount/remount
-                        // when the parent re-renders due to input changes
-                        const stableKey = codeString.length + '_' + codeString.slice(0, 60);
-                        return <TikzImage key={stableKey} code={codeString} />;
-                      }
-
-                      if (!inline && codeString.includes('<svg')) {
-                        return (
-                          <div
-                            className="my-4 w-full overflow-hidden rounded-lg shadow-sm bg-white flex justify-center"
-                            dangerouslySetInnerHTML={{ __html: codeString }}
-                          />
-                        );
-                      }
-
-                      return inline ? (
-                        <code className={className} {...props}>{children}</code>
-                      ) : (
-                        <pre className="bg-gray-800 text-gray-100 p-4 rounded-md overflow-x-auto text-sm my-2">
-                          <code className={className} {...props}>{children}</code>
-                        </pre>
-                      );
-                    },
-                  }}
-                >
-                  {formatMessageContent(msg.content) || (msg.images && msg.images.length > 0 ? "*(上傳了圖片)*" : "")}
-                </ReactMarkdown>
-              </div>
-
-              {msg.images && msg.images.map((img: string, i: number) => (
-                <img key={i} src={img} className="mt-2 max-h-80 rounded-xl border border-gray-100 shadow-sm" alt="Student question" />
-              ))}
-            </div>
-          </div>
+          <MessageBubble
+            key={`${msg.threadId}-${msg.timestamp}-${idx}`}
+            msg={msg}
+            idx={idx}
+            onSaveToNotebook={stableSaveToNotebook}
+          />
         ))}
         <div ref={messagesEndRef} />
       </div>
