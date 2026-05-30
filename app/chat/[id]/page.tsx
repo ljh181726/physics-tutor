@@ -264,11 +264,13 @@ function ChatContent() {
       setMessages(prev => [...prev, { role: "model", content: `❌ 錯誤：${error.message}`, timestamp: Date.now() }]);
     } finally { setIsSending(false); }
   };
-
   // 🛡️ 最強字串修復：解決 AI 亂打標籤或不穿衣服的狀況
   const formatMessageContent = (text: string) => {
     if (!text) return "";
     let fixedText = text;
+    
     // 把 AI 寫錯的 ```latex 等標籤換成我們系統認得的 ```tikz
-    fixedText = fixedText.replace(/
-http://googleusercontent.com/immersive_entry_chip/0
+    fixedText = fixedText.replace(/```latex/g, "```tikz");
+    
+    return fixedText;
+  };
