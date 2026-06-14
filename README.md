@@ -8,4 +8,4 @@ pinned: false
 ---
 
 # AI 物理家教
-這是一個基於 Gemini 1.5 Flash 的 AI 物理解題助手。
+這是一個基於 Gemini 3.1 Flash Lite 的 AI 物理解題助手。
