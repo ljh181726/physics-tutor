@@ -1,37 +1,133 @@
 @import 'katex/dist/katex.min.css';
 @import "tailwindcss";
-/* 讓 AI 生成的圖表有一個乾淨的背景框 */
+
+/* 🌟 Premium Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* 🌟 Glassmorphism Classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 🌟 Keyframes and Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-light {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-pulse-light {
+  animation: pulse-light 1.8s infinite ease-in-out;
+}
+
+/* 🌟 AI content SVG style */
 .ai-content-svg svg {
   background: white;
-  border-radius: 8px;
-  padding: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  margin: 10px 0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  margin: 1.5rem 0;
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
+
 .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 10px 0;
-}
-/* 讓 Markdown 裡面的數學公式可以橫向捲動（手機版必備） */
-.markdown-content .katex-display {
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 10px 0;
-  margin: 0;
+  padding: 12px 0;
+  margin: 0.8em 0;
 }
 
-/* 讓 AI 畫出的 SVG 圖表自適應寬度 */
-.markdown-content svg {
-  max-width: 100%;
-  height: auto;
-  background: white;
-  border-radius: 8px;
-  margin: 1rem 0;
+/* 🌟 Markdown rendering details */
+.markdown-content {
+  font-size: 0.975rem;
+  color: #334155;
+  line-height: 1.8;
 }
 
-/* 修正 Markdown 列表的間距 */
+.markdown-content p {
+  line-height: 1.8 !important;
+  margin-bottom: 0.75em !important;
+}
+
 .markdown-content ul, .markdown-content ol {
-  padding-left: 1.5rem;
+  padding-left: 1.75rem;
   margin: 1rem 0;
+}
+
+.markdown-content li {
+  margin-bottom: 0.5em;
+}
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.markdown-content h1 { font-size: 1.5rem; }
+.markdown-content h2 { font-size: 1.25rem; }
+.markdown-content h3 { font-size: 1.1rem; }
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.markdown-content th, .markdown-content td {
+  border: 1px solid #f1f5f9;
+  padding: 10px 14px;
+}
+
+.markdown-content th {
+  background-color: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  text-align: left;
+}
+
+.markdown-content td {
+  background-color: white;
+}
+
+.markdown-content tr:nth-child(even) td {
+  background-color: #f8fafc;
 }

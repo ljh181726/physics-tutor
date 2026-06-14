@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db } from "../../../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -12,15 +12,15 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   // 統計數據狀態
-  const [studentsData, setStudentsData] = useState({}); // 存放每個學生的統計資料
+  const [studentsData, setStudentsData] = useState<Record<string, any>>({}); // 存放每個學生的統計資料
   
   // 當前選中的學生
   const [selectedUid, setSelectedUid] = useState("");
   const [selectedName, setSelectedName] = useState("");
 
   // 選中學生的詳細資料
-  const [studentWrongQuestions, setStudentWrongQuestions] = useState([]);
-  const [studentKnowledge, setStudentKnowledge] = useState([]);
+  const [studentWrongQuestions, setStudentWrongQuestions] = useState<any[]>([]);
+  const [studentKnowledge, setStudentKnowledge] = useState<any[]>([]);
 
   // 新增講義表單狀態
   const [subject, setSubject] = useState("physics");
@@ -29,7 +29,7 @@ export default function AdminDashboard() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser: any) => {
       // 🚀 鎖定管理員 Email
       if (!currentUser || currentUser.email !== "ljh181726@gmail.com") {
         alert("無權限訪問！");
@@ -51,10 +51,10 @@ export default function AdminDashboard() {
       // 撈取所有的聊天訊息，用來計算真正的「發問次數」
       const chatsSnapshot = await getDocs(collection(db, "chats"));
       
-      const analytics = {};
+      const analytics: Record<string, any> = {};
 
       // 1. 先建立學生基本房間與科目對照
-      threadsSnapshot.docs.forEach((docData) => {
+      threadsSnapshot.docs.forEach((docData: any) => {
         const data = docData.data();
         const uid = data.uid;
         if (!uid) return;
@@ -64,13 +64,13 @@ export default function AdminDashboard() {
             uid: uid,
             name: "未知學生",
             totalQuestions: 0,
-            subjects: { physics: 0, math: 0, chemistry: 0, biology: 0, earth: 0 }
+            subjects: { physics: 0, math: 0, chemistry: 0, biology: 0, earth: 0, chinese: 0, english: 0 }
           };
         }
       });
 
       // 2. 計算每個學生在各科目的實際發問次數 (role === 'user')
-      chatsSnapshot.docs.forEach((docData) => {
+      chatsSnapshot.docs.forEach((docData: any) => {
         const data = docData.data();
         const uid = data.uid;
         const role = data.role;
@@ -95,24 +95,24 @@ export default function AdminDashboard() {
   };
 
   // 🔍 點擊學生時，撈取該生專屬的錯題本與個人講義庫
-  const handleSelectStudent = async (uid, name) => {
+  const handleSelectStudent = async (uid: string, name: string) => {
     setSelectedUid(uid);
     setSelectedName(name);
     try {
       // 1. 撈取該學生的錯題本
       const wqSnapshot = await getDocs(query(collection(db, `users/${uid}/wrong_questions`), orderBy("timestamp", "desc")));
-      setStudentWrongQuestions(wqSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setStudentWrongQuestions(wqSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
 
       // 2. 撈取該學生的個人專屬講義庫
       const kbSnapshot = await getDocs(query(collection(db, `users/${uid}/knowledge_base`), orderBy("timestamp", "desc")));
-      setStudentKnowledge(kbSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setStudentKnowledge(kbSnapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     } catch (err) {
       console.error("撈取學生詳細資料失敗", err);
     }
   };
 
   // ➕ 幫特定學生新增講義 (因材施教)
-  const handleAddStudentKnowledge = async (e) => {
+  const handleAddStudentKnowledge = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUid) return alert("請先從左側選擇一位學生");
     if (!title.trim() || !content.trim()) return alert("標題與心法內容不能為空");
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
       setTitle(""); setContent("");
       // 重新整理講義列表
       handleSelectStudent(selectedUid, selectedName);
-    } catch (err) {
+    } catch (err: any) {
       alert("儲存失敗：" + err.message);
     } finally {
       setIsSaving(false);
@@ -135,11 +135,11 @@ export default function AdminDashboard() {
   };
 
   // 🗑️ 刪除該學生的某條講義
-  const handleDeleteKnowledge = async (id) => {
+  const handleDeleteKnowledge = async (id: string) => {
     if (!confirm("確定要移除這位學生的這條講義心法嗎？")) return;
     try {
       await deleteDoc(doc(db, `users/${selectedUid}/knowledge_base`, id));
-      setStudentKnowledge(prev => prev.filter(k => k.id !== id));
+      setStudentKnowledge((prev: any[]) => prev.filter((k: any) => k.id !== id));
     } catch (err) { alert("刪除失敗"); }
   };
 
@@ -171,6 +171,8 @@ export default function AdminDashboard() {
                   <th className="pb-3 text-center">🧪 化學</th>
                   <th className="pb-3 text-center">🧬 生物</th>
                   <th className="pb-3 text-center">🌍 地科</th>
+                  <th className="pb-3 text-center">🏮 國文</th>
+                  <th className="pb-3 text-center">🔤 英文</th>
                   <th className="pb-3 text-right pr-2">操作</th>
                 </tr>
               </thead>
@@ -184,6 +186,8 @@ export default function AdminDashboard() {
                     <td className="py-4 text-center text-green-600">{student.subjects.chemistry}</td>
                     <td className="py-4 text-center text-purple-600">{student.subjects.biology}</td>
                     <td className="py-4 text-center text-amber-600">{student.subjects.earth}</td>
+                    <td className="py-4 text-center text-rose-600">{student.subjects.chinese}</td>
+                    <td className="py-4 text-center text-indigo-600">{student.subjects.english}</td>
                     <td className="py-4 text-right pr-2">
                       <button 
                         onClick={() => handleSelectStudent(student.uid, student.name)}
@@ -215,6 +219,8 @@ export default function AdminDashboard() {
                     <option value="chemistry">🧪 高中化學</option>
                     <option value="biology">🧬 高中生物</option>
                     <option value="earth">🌍 高中地科</option>
+                    <option value="chinese">🏮 高中國文</option>
+                    <option value="english">🔤 高中英文</option>
                   </select>
                 </div>
                 <div>
